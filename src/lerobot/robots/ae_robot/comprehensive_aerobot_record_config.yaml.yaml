@@ -1,0 +1,31 @@
+# Example YAML configuration for BiAERobot with personalized arm parameters.
+# You can save this to a file (e.g., my_bi_aerobot_config.yaml) and pass it to the script.
+#
+# lerobot-record-aerobot --config-path my_bi_aerobot_config.yaml ...
+#
+robot:
+  type: bi_ae_robot
+  left_arm_config:
+    server_url: "http://192.168.1.100:5000" # IP address for the left arm's server
+    action_scale: [0.06, 1.1, 1.0]           # Custom action scale for the left arm
+    reset_pose: [0.35, 0.1, 0.25, 3.14, 0.0, 0.0] # Custom reset pose for the left arm
+    gripper_open_width: 0.09                # Custom gripper open width for the left arm
+    cameras:                                # Custom camera configuration for the left arm
+      left_wrist_cam:
+        type: opencv
+        index_or_path: 0
+        width: 640
+        height: 480
+        fps: 30
+  right_arm_config:
+    server_url: "http://192.168.1.101:5000" # IP address for the right arm's server
+    action_scale: [0.04, 0.9, 1.0]           # Custom action scale for the right arm
+    reset_pose: [0.35, -0.1, 0.25, 3.14, 0.0, 0.0] # Custom reset pose for the right arm
+    gripper_close_width: 0.01               # Custom gripper close width for the right arm
+    cameras:                                # Custom camera configuration for the right arm
+      right_wrist_cam:
+        type: opencv
+        index_or_path: 1
+        width: 640
+        height: 480
+        fps: 30
