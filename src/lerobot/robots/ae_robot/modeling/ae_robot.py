@@ -117,7 +117,22 @@ class AERobot(Robot):
                 logger.info("Compliance parameters updated.")
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Failed to set compliance parameters: {e}")
-        
+
+    def _send_pose_command(self, target_pose: np.ndarray, timeout: float = 0) -> None:
+        """
+        Sends a pose command to the robot server.
+        If a timeout is provided, it will wait for that duration after sending the command.
+        This simulates an interpolated move if the robot server handles interpolation.
+        """
+        if not self.is_connected:
+            raise DeviceNotConnectedError(f"{self} is not connected.")
+        try:
+            requests.post(f"{self.config.server_url}/pose", json={"arr": target_pose.tolist()}).raise_for_status()
+            if timeout > 0:
+                time.sleep(timeout)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send pose command: {e}")
+
     def get_observation(self) -> dict[str, Any]:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
@@ -167,10 +182,7 @@ class AERobot(Robot):
         target_pose = self._clip_to_workspace(target_pose)
 
         # Send pose command
-        try:
-            requests.post(f"{self.config.server_url}/pose", json={"arr": target_pose.tolist()}).raise_for_status()
-        except requests.exceptions.RequestException as e:
-            raise IOError(f"Failed to send pose to ae_server: {e}")
+        self._send_pose_command(target_pose)
 
         # Gripper action
         gripper_action = action["gripper_action"][0]
@@ -183,30 +195,35 @@ class AERobot(Robot):
         """Internal function to send gripper command to the robot."""
         # This is a simplified binary gripper control.
         # pos < -0.5: close, pos > 0.5: open
-        # This logic is based on `Ae_DualEnv._send_gripper_command`
+        
+        # Ensure minimum time between gripper actions
         if time.time() - self.last_gripper_act_time < self.gripper_sleep_duration:
             return
 
-        # Assuming gripper fully open is > 0.01 and closed is < 0.01
-        # This threshold may need adjustment.
-        gripper_open_threshold = 0.01 
+        # Define gripper open/close thresholds based on config
+        # Assuming a smaller value means more closed, larger means more open.
+        # This needs to be consistent with the actual gripper feedback.
+        gripper_close_threshold = self.config.gripper_close_width + 0.005 # A bit above fully closed
+        gripper_open_threshold = self.config.gripper_open_width - 0.005  # A bit below fully open
         
-        if pos < -0.5 and current_pos > gripper_open_threshold:  # Close gripper
+        command_url = None
+        payload = None
+
+        if pos < -0.5 and current_pos > gripper_close_threshold:  # Close gripper
             command_url = f"{self.config.server_url}/{self.config.gripper_commands['close']}"
             payload = {"position": self.config.gripper_close_width}
-            self.last_gripper_act_time = time.time()
         elif pos > 0.5 and current_pos < gripper_open_threshold: # Open gripper
             command_url = f"{self.config.server_url}/{self.config.gripper_commands['open']}"
             payload = {"position": self.config.gripper_open_width}
-            self.last_gripper_act_time = time.time()
         else:
-            return
+            return # No action needed or not meeting criteria
 
-        try:
-            requests.post(command_url, json=payload).raise_for_status()
-            time.sleep(self.gripper_sleep_duration)
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Failed to send gripper command: {e}")
+        if command_url and payload:
+            try:
+                requests.post(command_url, json=payload).raise_for_status()
+                self.last_gripper_act_time = time.time() # Update last action time after successful command
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Failed to send gripper command: {e}")
 
     def _clip_to_workspace(self, pose: np.ndarray) -> np.ndarray:
         """Clip the pose to be within the safety box."""
@@ -224,19 +241,46 @@ class AERobot(Robot):
 
         return pose
 
-    def go_to_rest(self):
-        """Send robot to a pre-defined rest pose."""
+    def reset(self) -> None:
+        """
+        Resets the robot to its initial configuration and state.
+        This includes setting precision mode, resetting the gripper,
+        moving to the reset pose, and then setting compliance mode.
+        """
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
+
+        self.last_gripper_act_time = 0 # Reset gripper timer to allow immediate action
+
+        # Set precision parameters for reset movement
+        if self.config.precision_param:
+            try:
+                requests.post(f"{self.config.server_url}/update_param", json=self.config.precision_param).raise_for_status()
+                logger.info("Precision parameters set for reset.")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Failed to set precision parameters for reset: {e}")
         
+        # Set gripper to reset state
+        width_key = "gripper_open_width" if self.config.gripper_reset_command == "open" else "gripper_close_width"
+        width = getattr(self.config, width_key, None)
+        gripper_command_url = f"{self.config.server_url}/{self.config.gripper_commands[self.config.gripper_reset_command]}"
+        try:
+            requests.post(gripper_command_url, json={"position": width}).raise_for_status()
+            self.last_gripper_act_time = time.time() # Update last action time
+            time.sleep(self.gripper_sleep_duration) # Wait for gripper action to complete
+            logger.info(f"Gripper reset command '{self.config.gripper_reset_command}' sent.")
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to send gripper reset command: {e}")
+
+        # Move to reset pose
         reset_pose_euler = self.config.reset_pose
         reset_pose_quat = np.concatenate([reset_pose_euler[:3], R.from_euler("xyz", reset_pose_euler[3:]).as_quat()])
-        
-        try:
-            # Maybe interpolate? For now, just a direct command.
-             requests.post(f"{self.config.server_url}/pose", json={"arr": reset_pose_quat.tolist()}).raise_for_status()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to go to rest pose: {e}")
+        self._send_pose_command(reset_pose_quat, timeout=1.2) # Use timeout for reset movement
+        logger.info("Robot moved to reset pose.")
+
+        # Restore compliance parameters
+        self.configure() # This will apply compliance_param if configured
+        logger.info("Compliance parameters restored after reset.")
 
     def disconnect(self):
         if not self.is_connected:

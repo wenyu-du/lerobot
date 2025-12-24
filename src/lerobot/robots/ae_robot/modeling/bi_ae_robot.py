@@ -165,8 +165,8 @@ class BiAERobot(Robot):
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
-        left_thread = threading.Thread(target=self.left_arm.go_to_rest)
-        right_thread = threading.Thread(target=self.right_arm.go_to_rest)
+        left_thread = threading.Thread(target=self.left_arm.reset)
+        right_thread = threading.Thread(target=self.right_arm.reset)
 
         left_thread.start()
         right_thread.start()

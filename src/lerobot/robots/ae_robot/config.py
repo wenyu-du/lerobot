@@ -51,6 +51,10 @@ class AERobotConfig(RobotConfig):
 
     # Compliance parameters for the robot controller
     compliance_param: dict[str, Any] | None = None
+    # Precision parameters for the robot controller
+    precision_param: dict[str, Any] | None = None
+    # Gripper reset command ("open" or "close")
+    gripper_reset_command: str = "open"
 
     # cameras
     cameras: dict[str, CameraConfig] = field(default_factory=dict)

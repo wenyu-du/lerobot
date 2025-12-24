@@ -177,4 +177,4 @@ outputs/
 *.urdf
 *.xml
 *.part
-*copied_aerobot_rl_env/
+# *copied_aerobot_rl_env/
