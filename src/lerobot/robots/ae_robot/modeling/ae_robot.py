@@ -50,8 +50,14 @@ class AERobot(Robot):
 
     @property
     def _robot_ft(self) -> dict[str, tuple]:
+        if self.config.rotation_format == "quat":
+            # x, y, z, qx, qy, qz, qw
+            tcp_pose_shape = (7,)
+        else:
+            # x, y, z, roll, pitch, yaw
+            tcp_pose_shape = (6,)
         return {
-            "tcp_pose": (7,),  # x, y, z, qx, qy, qz, qw
+            "tcp_pose": tcp_pose_shape,
             "gripper_pos": (1,),
         }
 
@@ -141,8 +147,18 @@ class AERobot(Robot):
             response = requests.post(f"{self.config.server_url}/getstate")
             response.raise_for_status()
             state = response.json()
+
+            tcp_pose_quat = np.array(state["pose"])
+
+            if self.config.rotation_format == "quat":
+                tcp_pose = tcp_pose_quat
+            else:
+                rot = R.from_quat(tcp_pose_quat[3:])
+                euler = rot.as_euler(self.config.rotation_format)
+                tcp_pose = np.concatenate([tcp_pose_quat[:3], euler])
+
             obs_dict = {
-                "tcp_pose": np.array(state["pose"]),
+                "tcp_pose": tcp_pose,
                 "gripper_pos": np.array([state["gripper_pos"]]),
             }
         except requests.exceptions.RequestException as e:
@@ -163,15 +179,19 @@ class AERobot(Robot):
 
         # Pose action
         delta_pose = action["delta_tcp_pose"]
-        
+
         # Get current pose
         current_state = self.get_observation()
-        current_pose_quat = current_state["tcp_pose"]
+        current_pose = current_state["tcp_pose"]
 
         # Apply delta
-        target_pose_xyz = current_pose_quat[:3] + delta_pose[:3] * self.config.action_scale[0]
+        target_pose_xyz = current_pose[:3] + delta_pose[:3] * self.config.action_scale[0]
 
-        current_rot = R.from_quat(current_pose_quat[3:])
+        if self.config.rotation_format == "quat":
+            current_rot = R.from_quat(current_pose[3:])
+        else:
+            current_rot = R.from_euler(self.config.rotation_format, current_pose[3:])
+
         delta_rot = R.from_euler("xyz", delta_pose[3:])
         target_rot = delta_rot * current_rot
         target_pose_quat_xyzw = target_rot.as_quat()

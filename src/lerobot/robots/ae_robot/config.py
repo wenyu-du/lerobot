@@ -42,6 +42,9 @@ class AERobotConfig(RobotConfig):
         default_factory=lambda: [0.3, 0.0, 0.2, 3.14, 0.0, 0.0]
     )
 
+    # Rotation format for tcp_pose observation ("quat", "xyz", "zyx")
+    rotation_format: str = "xyz"
+
     # Gripper settings
     gripper_open_width: float = 0.08
     gripper_close_width: float = 0.0
