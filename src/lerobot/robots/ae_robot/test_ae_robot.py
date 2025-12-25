@@ -81,19 +81,32 @@ def test_ae_robot_observation(robot_config):
         # Mock server endpoints
         m.post("http://localhost:5000/getstate", json={"pose": [0.3, 0.0, 0.2, 0.0, 0.0, 0.0, 1.0], "gripper_pos": 0.0})
         m.post("http://localhost:5000/startimp", status_code=200)
-        
+
         robot.connect()
-        
+
         obs = robot.get_observation()
-        
-        print("\n--- Observation ---")
-        for key, value in obs.items():
-            print(f"{key}: {value}")
-        
-        assert "tcp_pose" in obs
+
+        assert "tcp_pose_x" in obs
+        assert "tcp_pose_y" in obs
+        assert "tcp_pose_z" in obs
+        assert "tcp_pose_roll" in obs
+        assert "tcp_pose_pitch" in obs
+        assert "tcp_pose_yaw" in obs
         assert "gripper_pos" in obs
-        assert obs["tcp_pose"].shape == (7,)
-        assert obs["gripper_pos"].shape == (1,)
+
+        assert isinstance(obs["tcp_pose_x"], float)
+        assert isinstance(obs["gripper_pos"], float)
+
+    # Test with quat
+    robot_config.rotation_format = "quat"
+    robot = AERobot(config=robot_config)
+    with requests_mock.Mocker() as m:
+        m.post("http://localhost:5000/getstate", json={"pose": [0.3, 0.0, 0.2, 0.0, 0.0, 0.0, 1.0], "gripper_pos": 0.0})
+        m.post("http://localhost:5000/startimp", status_code=200)
+        robot.connect()
+        obs = robot.get_observation()
+        assert "tcp_pose_qx" in obs
+        assert "tcp_pose_roll" not in obs
 
 def test_ae_robot_reset(robot_config):
     """Test the reset functionality of AERobot."""
@@ -195,39 +208,43 @@ def test_ae_robot_action(robot_config):
         # Mock server endpoints for connection and observation
         m.post("http://localhost:5000/getstate", json={"pose": [0.3, 0.0, 0.2, 0.0, 0.0, 0.0, 1.0], "gripper_pos": 0.0})
         m.post("http://localhost:5000/startimp", status_code=200)
-        
+
         # Mock endpoints for sending action
         m.post("http://localhost:5000/pose", status_code=200)
         m.post("http://localhost:5000/open_gripper", status_code=200)
-        
+
         robot.connect()
 
         # Define a sample action
         action = {
-            "delta_tcp_pose": np.array([0.01, 0.0, 0.0, 0.0, 0.0, 0.0]),
-            "gripper_action": np.array([1.0]),  # Open gripper
+            "delta_tcp_pose_x": 0.01,
+            "delta_tcp_pose_y": 0.0,
+            "delta_tcp_pose_z": 0.0,
+            "delta_tcp_pose_roll": 0.0,
+            "delta_tcp_pose_pitch": 0.0,
+            "delta_tcp_pose_yaw": 0.0,
+            "gripper_action": 1.0,  # Open gripper
         }
-        
+
         print("\n--- Sent Action ---")
         for key, value in action.items():
             print(f"{key}: {value}")
-            
+
         sent_action = robot.send_action(action)
-        
+
         # Verify that the sent action is the same as the input
-        assert np.array_equal(sent_action["delta_tcp_pose"], action["delta_tcp_pose"])
-        assert np.array_equal(sent_action["gripper_action"], action["gripper_action"])
-        
+        assert sent_action == action
+
         # Check if the correct requests were made
         assert m.called
-        pose_request = m.request_history[-2] # Second to last request
-        assert pose_request.method == 'POST'
-        assert pose_request.url == 'http://localhost:5000/pose'
-        
-        gripper_request = m.request_history[-1] # Last request
-        assert gripper_request.method == 'POST'
-        assert 'open_gripper' in gripper_request.url
-        
+        pose_request = m.request_history[-2]  # Second to last request
+        assert pose_request.method == "POST"
+        assert pose_request.url == "http://localhost:5000/pose"
+
+        gripper_request = m.request_history[-1]  # Last request
+        assert gripper_request.method == "POST"
+        assert "open_gripper" in gripper_request.url
+
         print("\n--- Mocked API Calls ---")
         print(f"Pose URL called: {pose_request.url}")
         print(f"Pose JSON payload: {pose_request.json()}")

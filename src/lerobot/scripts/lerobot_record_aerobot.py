@@ -64,7 +64,7 @@ lerobot-record-aerobot \
     --dataset.repo_id="<my_username>/<my_dataset_name>" \
     --dataset.single_task="Push the cube with two arms"
 ```
-"
+"""
 
 import logging
 import time
@@ -83,7 +83,11 @@ from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.image_writer import safe_stop_image_writer
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
-from lerobot.datasets.utils import build_dataset_frame, combine_feature_dicts
+from lerobot.datasets.utils import (
+    build_dataset_frame,
+    combine_feature_dicts,
+    hw_to_dataset_features,
+)
 from lerobot.datasets.video_utils import VideoEncodingManager
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
@@ -113,38 +117,13 @@ from lerobot.utils.control_utils import (
     sanity_check_dataset_name,
     sanity_check_dataset_robot_compatibility,
 )
-from lerobot.utils.import_utils import is_rclpy_available, register_third_party_plugins
-from lerobot.utils.robot_utils import precise_sleep
+from lerobot.utils.import_utils import is_rclpy_available, register_third_party_devices
+from lerobot.utils.robot_utils import busy_wait as precise_sleep
 from lerobot.utils.utils import get_safe_torch_device, init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 
 if is_rclpy_available():
     import rclpy
-
-
-@dataclass
-default_action_features = {
-    k: np.zeros(v) if isinstance(v, tuple) else np.array([0.0])
-    for k, v in robot.action_features.items()
-}
-final_action_values = make_robot_action(default_action_features, dataset.features)
-
-
-robot_action_to_send = robot_action_processor((final_action_values, obs))
-robot.send_action(robot_action_to_send)
-
-if dataset is not None:
-    action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION)
-    frame = {**observation_frame, **action_frame, "task": single_task}
-    dataset.add_frame(frame)
-
-if display_data:
-    log_rerun_data(observation=obs_processed, action=final_action_values)
-
-dt_s = time.perf_counter() - start_loop_t
-precise_sleep(1 / fps - dt_s)
-
-timestamp = time.perf_counter() - start_episode_t
 
 
 @dataclass
@@ -235,7 +214,7 @@ def record_loop(
 
         # Prepare observation for policy if needed
         observation_frame = None
-        if policy is not None or (dataset is not None and use_intervention):
+        if dataset is not None:
             observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR)
 
 
@@ -316,18 +295,13 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    dataset_features = combine_feature_dicts(
-        aggregate_pipeline_dataset_features(
-            pipeline=teleop_action_processor,
-            initial_features=create_initial_features(action=robot.action_features),
-            use_videos=cfg.dataset.video,
-        ),
-        aggregate_pipeline_dataset_features(
-            pipeline=robot_observation_processor,
-            initial_features=create_initial_features(observation=robot.observation_features),
-            use_videos=cfg.dataset.video,
-        ),
+    action_features = hw_to_dataset_features(
+        robot.action_features, prefix=ACTION, use_video=cfg.dataset.video
     )
+    observation_features = hw_to_dataset_features(
+        robot.observation_features, prefix=OBS_STR, use_video=cfg.dataset.video
+    )
+    dataset_features = combine_feature_dicts(action_features, observation_features)
 
     dataset = None
     listener = None
@@ -465,7 +439,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
 
 def main():
-    register_third_party_plugins()
+    register_third_party_devices()
     record()
 
 

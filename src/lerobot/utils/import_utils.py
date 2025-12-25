@@ -61,6 +61,8 @@ def is_package_available(pkg_name: str, return_version: bool = False) -> tuple[b
         return package_exists
 
 
+def is_rclpy_available():
+    return is_package_available("rclpy")
 _transformers_available = is_package_available("transformers")
 _peft_available = is_package_available("peft")
 

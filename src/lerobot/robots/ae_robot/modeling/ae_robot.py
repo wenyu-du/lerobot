@@ -48,34 +48,49 @@ class AERobot(Robot):
         self._connected = False
         self.cameras = make_cameras_from_configs(config.cameras)
 
-    @property
-    def _robot_ft(self) -> dict[str, tuple]:
+    @cached_property
+    def observation_features(self) -> dict[str, Any]:
+        obs_fts = {}
         if self.config.rotation_format == "quat":
-            # x, y, z, qx, qy, qz, qw
-            tcp_pose_shape = (7,)
+            obs_fts.update(
+                {
+                    "tcp_pose_x": float,
+                    "tcp_pose_y": float,
+                    "tcp_pose_z": float,
+                    "tcp_pose_qx": float,
+                    "tcp_pose_qy": float,
+                    "tcp_pose_qz": float,
+                    "tcp_pose_qw": float,
+                }
+            )
         else:
-            # x, y, z, roll, pitch, yaw
-            tcp_pose_shape = (6,)
-        return {
-            "tcp_pose": tcp_pose_shape,
-            "gripper_pos": (1,),
-        }
+            obs_fts.update(
+                {
+                    "tcp_pose_x": float,
+                    "tcp_pose_y": float,
+                    "tcp_pose_z": float,
+                    "tcp_pose_roll": float,
+                    "tcp_pose_pitch": float,
+                    "tcp_pose_yaw": float,
+                }
+            )
+        obs_fts["gripper_pos"] = float
 
-    @property
-    def _cameras_ft(self) -> dict[str, tuple]:
-        return {
-            cam: (self.config.cameras[cam].height, self.config.cameras[cam].width, 3) for cam in self.cameras
-        }
+        for cam in self.cameras:
+            obs_fts[cam] = (self.config.cameras[cam].height, self.config.cameras[cam].width, 3)
+
+        return obs_fts
 
     @cached_property
-    def observation_features(self) -> dict[str, tuple]:
-        return {**self._robot_ft, **self._cameras_ft}
-
-    @cached_property
-    def action_features(self) -> dict[str, type]:
+    def action_features(self) -> dict[str, Any]:
         return {
-            "delta_tcp_pose": (6,),  # dx, dy, dz, d_roll, d_pitch, d_yaw
-            "gripper_action": (1,), # binary open/close
+            "delta_tcp_pose_x": float,
+            "delta_tcp_pose_y": float,
+            "delta_tcp_pose_z": float,
+            "delta_tcp_pose_roll": float,
+            "delta_tcp_pose_pitch": float,
+            "delta_tcp_pose_yaw": float,
+            "gripper_action": float,
         }
 
     @property
@@ -149,18 +164,28 @@ class AERobot(Robot):
             state = response.json()
 
             tcp_pose_quat = np.array(state["pose"])
+            obs_dict = {}
 
             if self.config.rotation_format == "quat":
-                tcp_pose = tcp_pose_quat
+                obs_dict["tcp_pose_x"] = tcp_pose_quat[0]
+                obs_dict["tcp_pose_y"] = tcp_pose_quat[1]
+                obs_dict["tcp_pose_z"] = tcp_pose_quat[2]
+                obs_dict["tcp_pose_qx"] = tcp_pose_quat[3]
+                obs_dict["tcp_pose_qy"] = tcp_pose_quat[4]
+                obs_dict["tcp_pose_qz"] = tcp_pose_quat[5]
+                obs_dict["tcp_pose_qw"] = tcp_pose_quat[6]
             else:
                 rot = R.from_quat(tcp_pose_quat[3:])
                 euler = rot.as_euler(self.config.rotation_format)
-                tcp_pose = np.concatenate([tcp_pose_quat[:3], euler])
+                obs_dict["tcp_pose_x"] = tcp_pose_quat[0]
+                obs_dict["tcp_pose_y"] = tcp_pose_quat[1]
+                obs_dict["tcp_pose_z"] = tcp_pose_quat[2]
+                obs_dict["tcp_pose_roll"] = euler[0]
+                obs_dict["tcp_pose_pitch"] = euler[1]
+                obs_dict["tcp_pose_yaw"] = euler[2]
 
-            obs_dict = {
-                "tcp_pose": tcp_pose,
-                "gripper_pos": np.array([state["gripper_pos"]]),
-            }
+            obs_dict["gripper_pos"] = state["gripper_pos"]
+
         except requests.exceptions.RequestException as e:
             raise IOError(f"Failed to get observation from ae_server: {e}")
 
@@ -178,19 +203,43 @@ class AERobot(Robot):
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
         # Pose action
-        delta_pose = action["delta_tcp_pose"]
+        delta_pose = np.array(
+            [
+                action["delta_tcp_pose_x"],
+                action["delta_tcp_pose_y"],
+                action["delta_tcp_pose_z"],
+                action["delta_tcp_pose_roll"],
+                action["delta_tcp_pose_pitch"],
+                action["delta_tcp_pose_yaw"],
+            ]
+        )
 
         # Get current pose
-        current_state = self.get_observation()
-        current_pose = current_state["tcp_pose"]
+        current_obs = self.get_observation()
 
-        # Apply delta
-        target_pose_xyz = current_pose[:3] + delta_pose[:3] * self.config.action_scale[0]
+        current_pose_xyz = np.array([current_obs["tcp_pose_x"], current_obs["tcp_pose_y"], current_obs["tcp_pose_z"]])
 
         if self.config.rotation_format == "quat":
-            current_rot = R.from_quat(current_pose[3:])
+            current_pose_quat_rot = np.array(
+                [
+                    current_obs["tcp_pose_qx"],
+                    current_obs["tcp_pose_qy"],
+                    current_obs["tcp_pose_qz"],
+                    current_obs["tcp_pose_qw"],
+                ]
+            )
+            current_rot = R.from_quat(current_pose_quat_rot)
         else:
-            current_rot = R.from_euler(self.config.rotation_format, current_pose[3:])
+            current_pose_euler_rot = np.array(
+                [
+                    current_obs["tcp_pose_roll"],
+                    current_obs["tcp_pose_pitch"],
+                    current_obs["tcp_pose_yaw"],
+                ]
+            )
+            current_rot = R.from_euler(self.config.rotation_format, current_pose_euler_rot)
+
+        target_pose_xyz = current_pose_xyz + delta_pose[:3] * self.config.action_scale[0]
 
         delta_rot = R.from_euler("xyz", delta_pose[3:])
         target_rot = delta_rot * current_rot
@@ -205,8 +254,8 @@ class AERobot(Robot):
         self._send_pose_command(target_pose)
 
         # Gripper action
-        gripper_action = action["gripper_action"][0]
-        current_gripper_pos = current_state["gripper_pos"][0]
+        gripper_action = action["gripper_action"]
+        current_gripper_pos = current_obs["gripper_pos"]
         self._send_gripper_command(gripper_action, current_gripper_pos)
 
         return action

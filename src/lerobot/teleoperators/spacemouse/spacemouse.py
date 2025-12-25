@@ -22,7 +22,7 @@ import numpy as np
 from lerobot.teleoperators.teleoperator import Teleoperator
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
-from .configuration_spacemouse import SpaceMouseConfig, BiSpaceMouseConfig
+from .configuration_spacemouse import SingleSpaceMouseConfig, BiSpaceMouseConfig
 from . import pyspacemouse
 
 logger = logging.getLogger(__name__)
@@ -191,10 +191,10 @@ class SingleSpaceMouse(Teleoperator):
     A teleoperator for a single 3Dconnexion SpaceMouse.
     """
 
-    config_class = SpaceMouseConfig
+    config_class = SingleSpaceMouseConfig
     name = "spacemouse"
 
-    def __init__(self, config: SpaceMouseConfig):
+    def __init__(self, config: SingleSpaceMouseConfig):
         super().__init__(config)
         self.expert = SingleSpaceMouseExpert()
         self._is_connected = False
