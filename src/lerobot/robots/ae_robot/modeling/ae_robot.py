@@ -27,7 +27,7 @@ from lerobot.cameras.utils import make_cameras_from_configs
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
 from ...robot import Robot
-from ..config import AERobotConfig
+from ..config import AERobotArmConfig, AERobotConfig
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class AERobot(Robot):
     config_class = AERobotConfig
     name = "ae_robot"
 
-    def __init__(self, config: AERobotConfig):
+    def __init__(self, config: AERobotArmConfig):
         super().__init__(config)
         self.config = config
         self.last_gripper_act_time = 0

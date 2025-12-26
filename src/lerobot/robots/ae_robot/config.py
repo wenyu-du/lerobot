@@ -20,9 +20,9 @@ from typing import Any
 from lerobot.cameras import CameraConfig
 from ..config import RobotConfig
 
-@RobotConfig.register_subclass("ae_robot")
+
 @dataclass
-class AERobotConfig(RobotConfig):
+class AERobotArmConfig:
     # URL of the ae_server
     server_url: str = "http://127.0.0.1:5000"
 
@@ -35,12 +35,10 @@ class AERobotConfig(RobotConfig):
     )
 
     # Action scaling factor for delta pose
-    action_scale: tuple[float, float, float] = (0.05, 1.0, 1.0) # xyz, rpy, gripper
+    action_scale: tuple[float, float, float] = (0.05, 1.0, 1.0)  # xyz, rpy, gripper
 
     # Reset pose in euler angles [x, y, z, roll, pitch, yaw]
-    reset_pose: list[float] = field(
-        default_factory=lambda: [0.3, 0.0, 0.2, 3.14, 0.0, 0.0]
-    )
+    reset_pose: list[float] = field(default_factory=lambda: [0.3, 0.0, 0.2, 3.14, 0.0, 0.0])
 
     # Rotation format for tcp_pose observation ("quat", "xyz", "zyx")
     rotation_format: str = "xyz"
@@ -63,10 +61,16 @@ class AERobotConfig(RobotConfig):
     cameras: dict[str, CameraConfig] = field(default_factory=dict)
 
 
+@RobotConfig.register_subclass("ae_robot")
+@dataclass
+class AERobotConfig(RobotConfig, AERobotArmConfig):
+    pass
+
+
 @RobotConfig.register_subclass("bi_ae_robot")
 @dataclass
 class BiAERobotConfig(RobotConfig):
     # Left arm configuration
-    left_arm_config: AERobotConfig = field(default_factory=AERobotConfig)
+    left_arm_config: AERobotArmConfig = field(default_factory=AERobotArmConfig)
     # Right arm configuration
-    right_arm_config: AERobotConfig = field(default_factory=AERobotConfig)
+    right_arm_config: AERobotArmConfig = field(default_factory=AERobotArmConfig)
