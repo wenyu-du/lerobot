@@ -62,7 +62,19 @@ def is_package_available(pkg_name: str, return_version: bool = False) -> tuple[b
 
 
 def is_rclpy_available():
-    return is_package_available("rclpy")
+    if not is_package_available("rclpy"):
+        return False
+    try:
+        # Attempt a full import to ensure all dependencies can be loaded.
+        # This will trigger the actual loading of the module and its C extensions.
+        import rclpy
+        # If it imports without error, it's truly available.
+        return True
+    except ImportError as e:
+        # Log the error but return False, so the script can proceed without rclpy.
+        # This message will only show up if the logging level is DEBUG or lower.
+        logging.debug(f"rclpy is found but cannot be fully imported due to: {e}")
+        return False
 _transformers_available = is_package_available("transformers")
 _peft_available = is_package_available("peft")
 

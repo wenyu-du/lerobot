@@ -106,7 +106,6 @@ from lerobot.teleoperators import (
     Teleoperator,
     TeleoperatorConfig,
     make_teleoperator_from_config,
-    meta_quest,
     spacemouse,
 )
 from lerobot.utils.constants import ACTION, OBS_STR

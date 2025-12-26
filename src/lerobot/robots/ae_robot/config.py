@@ -29,8 +29,8 @@ class AERobotArmConfig:
     # Workspace limits [x_low, y_low, z_low, roll_low, pitch_low, yaw_low] and [x_high, y_high, z_high, roll_high, pitch_high, yaw_high]
     workspace_limits: dict[str, list[float]] = field(
         default_factory=lambda: {
-            "low": [0.2, -0.5, 0.0, -3.14, -1.57, -3.14],
-            "high": [0.8, 0.5, 0.6, 3.14, 1.57, 3.14],
+            "low": [0.44351,0.223,0.434, -0.27,  -1.06 , -1.39],
+            "high": [0.44351,0.223,0.634, -0.27,  -1.06 , -1.39],
         }
     )
 
