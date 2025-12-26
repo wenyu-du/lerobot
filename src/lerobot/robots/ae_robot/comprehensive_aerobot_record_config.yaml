@@ -1,7 +1,7 @@
 # Example YAML configuration for BiAERobot with personalized arm parameters.
-# You can save this to a file (e.g., my_bi_aerobot_config.yaml) and pass it to the script.
+# You can save this to a file and pass it to the script.
 #
-# lerobot-record-aerobot --config-path my_bi_aerobot_config.yaml ...
+# lerobot-record-aerobot --config-path comprehensive_aerobot_record_config.yaml ...
 #
 robot:
   type: bi_ae_robot

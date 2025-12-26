@@ -40,9 +40,21 @@ class AERobot(Robot):
     config_class = AERobotConfig
     name = "ae_robot"
 
-    def __init__(self, config: AERobotArmConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config: AERobotArmConfig, robot_id: str | None = None):
+        # Dynamically create an AERobotConfig (which is a RobotConfig) from AERobotArmConfig
+        full_robot_config = AERobotConfig()
+        
+        # Copy fields from AERobotArmConfig to full_robot_config
+        for attr in AERobotArmConfig.__dataclass_fields__:
+            if hasattr(config, attr):
+                setattr(full_robot_config, attr, getattr(config, attr))
+        
+        # Set id for the full_robot_config, using passed robot_id or a default
+        full_robot_config.id = robot_id if robot_id else "aerobot_component"
+        # calibration_dir will be handled by RobotConfig's default or through robot_id if needed
+        
+        super().__init__(full_robot_config) # Call Robot's __init__ with a proper RobotConfig
+        self.config = config # Keep the original AERobotArmConfig for AERobot's specific use.
         self.last_gripper_act_time = 0
         self.gripper_sleep_duration = 1.0  # seconds
         self._connected = False

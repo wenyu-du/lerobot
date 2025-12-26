@@ -254,6 +254,23 @@ class SingleSpaceMouse(Teleoperator):
             raise DeviceNotConnectedError(f"{self} is not connected.")
         return self.expert.get_action()
 
+    @cached_property
+    def feedback_features(self) -> dict:
+        return {}
+
+    @property
+    def is_calibrated(self) -> bool:
+        return True
+
+    def calibrate(self) -> None:
+        logger.info("SpaceMouse does not require calibration.")
+
+    def configure(self) -> None:
+        logger.info("SpaceMouse does not require configuration.")
+
+    def send_feedback(self, feedback: dict[str, Any]) -> None:
+        logger.debug("SpaceMouse does not support feedback.")
+
 
 class BiSpaceMouse(Teleoperator):
     """
@@ -359,3 +376,20 @@ class BiSpaceMouse(Teleoperator):
             combined_buttons[2:4] = buttons_sm1
 
         return combined_action_6d, combined_buttons
+
+    @cached_property
+    def feedback_features(self) -> dict:
+        return {}
+
+    @property
+    def is_calibrated(self) -> bool:
+        return True
+
+    def calibrate(self) -> None:
+        logger.info("SpaceMouse does not require calibration.")
+
+    def configure(self) -> None:
+        logger.info("SpaceMouse does not require configuration.")
+
+    def send_feedback(self, feedback: dict[str, Any]) -> None:
+        logger.debug("SpaceMouse does not support feedback.")

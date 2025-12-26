@@ -642,7 +642,8 @@ def hw_to_dataset_features(
         }
 
     for key, shape in cam_fts.items():
-        features[f"{prefix}.images.{key}"] = {
+        sanitized_key = key.replace("/", "_")
+        features[f"{prefix}.images.{sanitized_key}"] = {
             "dtype": "video" if use_video else "image",
             "shape": shape,
             "names": ["height", "width", "channels"],

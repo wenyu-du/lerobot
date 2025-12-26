@@ -45,8 +45,13 @@ class BiAERobot(Robot):
     def __init__(self, config: BiAERobotConfig):
         super().__init__(config)
         self.config = config
-        self.left_arm = AERobot(config.left_arm_config)
-        self.right_arm = AERobot(config.right_arm_config)
+        
+        left_arm_id = f"{config.id}_left" if config.id else "left_arm"
+        right_arm_id = f"{config.id}_right" if config.id else "right_arm"
+
+        self.left_arm = AERobot(config.left_arm_config, robot_id=left_arm_id)
+        self.right_arm = AERobot(config.right_arm_config, robot_id=right_arm_id)
+        self.cameras = make_cameras_from_configs(config.cameras)
         self._connected = False
 
     @cached_property
@@ -57,6 +62,11 @@ class BiAERobot(Robot):
             obs_features[f"left/{key}"] = shape
         for key, shape in self.right_arm.observation_features.items():
             obs_features[f"right/{key}"] = shape
+
+        # Add shared cameras
+        for cam in self.cameras:
+            obs_features[cam] = (self.config.cameras[cam].height, self.config.cameras[cam].width, 3)
+
         return obs_features
 
     @cached_property
@@ -71,7 +81,7 @@ class BiAERobot(Robot):
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self.left_arm.is_connected and self.right_arm.is_connected
+        return self._connected and self.left_arm.is_connected and self.right_arm.is_connected and all(cam.is_connected for cam in self.cameras.values())
 
     def connect(self, calibrate: bool = True) -> None:
         if self.is_connected:
@@ -86,6 +96,9 @@ class BiAERobot(Robot):
 
         left_thread.join()
         right_thread.join()
+
+        for cam in self.cameras.values():
+            cam.connect()
 
         self._connected = True
         logger.info(f"{self} connected.")
@@ -132,6 +145,14 @@ class BiAERobot(Robot):
             combined_obs[f"left/{key}"] = val
         for key, val in right_obs.items():
             combined_obs[f"right/{key}"] = val
+
+        # Capture images from shared cameras
+        for cam_key, cam in self.cameras.items():
+            start = time.perf_counter()
+            combined_obs[cam_key] = cam.async_read()
+            dt_ms = (time.perf_counter() - start) * 1e3
+            logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
+
         return combined_obs
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
@@ -186,6 +207,9 @@ class BiAERobot(Robot):
 
         left_thread.join()
         right_thread.join()
+
+        for cam in self.cameras.values():
+            cam.disconnect()
 
         self._connected = False
         logger.info(f"{self} disconnected.")

@@ -805,73 +805,64 @@ def open(
             DeviceNumber = 0
         
         if len(found_devices) == 6:
-            # Check that the input configuration has the correct components
-            # Raise an exception if it encounters incorrect component.
             check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-            # create a copy of the device specification
-            spec = found_devices[0]["Spec"]
-            dev0 = found_devices[0]["HIDDevice"]
-            new_device0 = copy.deepcopy(spec)
-            new_device0.device = dev0
+            opened_devices = []
+            
+            # Try to open the first device
+            try:
+                spec = found_devices[0]["Spec"]
+                dev0 = found_devices[0]["HIDDevice"]
+                new_device0 = copy.deepcopy(spec)
+                new_device0.device = dev0
+                new_device0.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+                new_device0.open()
+                new_device0.set_nonblocking_loop = set_nonblocking_loop
+                dev0.set_nonblocking(set_nonblocking_loop)
+                opened_devices.append(new_device0)
+            except Exception:
+                # This is not a warning because some interfaces are not meant to be opened.
+                pass
 
-            # set the callbacks
-            new_device0.callback = callback
-            new_device0.dof_callback = dof_callback
-            new_device0.dof_callback_arr = dof_callback_arr
-            new_device0.button_callback = button_callback
-            new_device0.button_callback_arr = button_callback_arr
-            # open the device
-            new_device0.open()
-            # set nonblocking/blocking mode
-            new_device0.set_nonblocking_loop = set_nonblocking_loop
-            dev0.set_nonblocking(set_nonblocking_loop)
+            # Try to open the second device
+            try:
+                spec = found_devices[3]["Spec"]
+                dev1 = found_devices[3]["HIDDevice"]
+                new_device1 = copy.deepcopy(spec)
+                new_device1.device = dev1
+                new_device1.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+                new_device1.open()
+                new_device1.set_nonblocking_loop = set_nonblocking_loop
+                dev1.set_nonblocking(set_nonblocking_loop)
+                opened_devices.append(new_device1)
+            except Exception:
+                # This is not a warning because some interfaces are not meant to be opened.
+                pass
 
+            if not opened_devices:
+                return None
 
-            spec = found_devices[3]["Spec"]
-            dev1 = found_devices[3]["HIDDevice"]
-            new_device1 = copy.deepcopy(spec)
-            new_device1.device = dev1
-
-            # set the callbacks
-            new_device1.callback = callback
-            new_device1.dof_callback = dof_callback
-            new_device1.dof_callback_arr = dof_callback_arr
-            new_device1.button_callback = button_callback
-            new_device1.button_callback_arr = button_callback_arr
-            # open the device
-            new_device1.open()
-            # set nonblocking/blocking mode
-            new_device1.set_nonblocking_loop = set_nonblocking_loop
-            dev1.set_nonblocking(set_nonblocking_loop)
-
-
-            _active_device = [new_device0, new_device1]
+            _active_device = opened_devices
             return _active_device
 
         if len(found_devices) > DeviceNumber:
-            # Check that the input configuration has the correct components
-            # Raise an exception if it encounters incorrect component.
             check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-            # create a copy of the device specification
-            spec = found_devices[DeviceNumber]["Spec"]
-            dev = found_devices[DeviceNumber]["HIDDevice"]
-            new_device = copy.deepcopy(spec)
-            new_device.device = dev
-
-            # set the callbacks
-            new_device.callback = callback
-            new_device.dof_callback = dof_callback
-            new_device.dof_callback_arr = dof_callback_arr
-            new_device.button_callback = button_callback
-            new_device.button_callback_arr = button_callback_arr
-            # open the device
-            new_device.open()
-            # set nonblocking/blocking mode
-            new_device.set_nonblocking_loop = set_nonblocking_loop
-            dev.set_nonblocking(set_nonblocking_loop)
-
-            _active_device = [new_device]
-            return new_device
+            
+            # Try to open the specified device
+            try:
+                spec = found_devices[DeviceNumber]["Spec"]
+                dev = found_devices[DeviceNumber]["HIDDevice"]
+                new_device = copy.deepcopy(spec)
+                new_device.device = dev
+                new_device.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+                new_device.open()
+                new_device.set_nonblocking_loop = set_nonblocking_loop
+                dev.set_nonblocking(set_nonblocking_loop)
+                
+                _active_device = [new_device]
+                return new_device
+            except Exception:
+                # This is not a warning because some interfaces are not meant to be opened.
+                return None
 
     print("Unknown error occured.")
     return None

@@ -74,3 +74,5 @@ class BiAERobotConfig(RobotConfig):
     left_arm_config: AERobotArmConfig = field(default_factory=AERobotArmConfig)
     # Right arm configuration
     right_arm_config: AERobotArmConfig = field(default_factory=AERobotArmConfig)
+    # cameras
+    cameras: dict[str, CameraConfig] = field(default_factory=dict)
