@@ -73,6 +73,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from pprint import pformat
 from typing import Any
+import traceback # Added for explicit traceback printing
 
 import draccus
 import numpy as np
@@ -193,6 +194,7 @@ def record_loop(
     single_task: str | None = None,
     display_data: bool = False,
     use_intervention: bool = False,
+    obs_image_name_map: dict[str, str] | None = None,
 ):
     if dataset is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset.fps} != {fps}).")
@@ -213,11 +215,11 @@ def record_loop(
 
         obs = robot.get_observation()
         obs_processed = robot_observation_processor(obs)
-
+        # logging.info(f"DEBUG: record_loop: obs_processed keys: {obs_processed.keys()}")
         # Prepare observation for policy if needed
         observation_frame = None
         if dataset is not None:
-            observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR)
+            observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR, obs_image_name_map=obs_image_name_map)
 
 
         final_action_values = None
@@ -250,7 +252,7 @@ def record_loop(
             final_action_values = teleop_action_processor((act, obs))
         else: # No policy, no teleop
             logging.info("No policy or teleoperator provided, sending zero action.")
-            # Send a zero action to keep the robot still
+            # Send a zero a action to keep the robot still
             # Initialize with default action features, then fill with zeros
             default_action_features = {
                 k: np.zeros(v) if isinstance(v, tuple) else np.array([0.0])
@@ -263,7 +265,7 @@ def record_loop(
         robot.send_action(robot_action_to_send)
 
         if dataset is not None:
-            action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION)
+            action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION, obs_image_name_map=None)
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
 
@@ -296,44 +298,53 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    action_features = hw_to_dataset_features(
+    action_features, _ = hw_to_dataset_features(
         robot.action_features, prefix=ACTION, use_video=cfg.dataset.video
     )
-    observation_features = hw_to_dataset_features(
+    observation_features, obs_image_name_map = hw_to_dataset_features(
         robot.observation_features, prefix=OBS_STR, use_video=cfg.dataset.video
     )
     dataset_features = combine_feature_dicts(action_features, observation_features)
+
+    # logging.info(f"DEBUG: robot.observation_features: {robot.observation_features}")
+    # logging.info(f"DEBUG: dataset_features: {dataset_features}")
 
     dataset = None
     listener = None
 
     try:
-        if cfg.resume:
-            dataset = LeRobotDataset(
-                cfg.dataset.repo_id,
-                root=cfg.dataset.root,
-                batch_encoding_size=cfg.dataset.video_encoding_batch_size,
-            )
-            if hasattr(robot, "cameras") and len(robot.cameras) > 0:
-                dataset.start_image_writer(
-                    num_processes=cfg.dataset.num_image_writer_processes,
-                    num_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
+        try:
+            if cfg.resume:
+                dataset = LeRobotDataset(
+                    cfg.dataset.repo_id,
+                    root=cfg.dataset.root,
+                    batch_encoding_size=cfg.dataset.video_encoding_batch_size,
                 )
-            sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
-        else:
-            sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
-            dataset = LeRobotDataset.create(
-                cfg.dataset.repo_id,
-                cfg.dataset.fps,
-                root=cfg.dataset.root,
-                robot_type=robot.name,
-                features=dataset_features,
-                use_videos=cfg.dataset.video,
-                image_writer_processes=cfg.dataset.num_image_writer_processes,
-                image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera
-                * (len(robot.cameras) if hasattr(robot, "cameras") else 0),
-                batch_encoding_size=cfg.dataset.video_encoding_batch_size,
-            )
+                if hasattr(robot, "cameras") and len(robot.cameras) > 0:
+                    dataset.start_image_writer(
+                        num_processes=cfg.dataset.num_image_writer_processes,
+                        num_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
+                    )
+                sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
+            else:
+                sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
+                dataset = LeRobotDataset.create(
+                    cfg.dataset.repo_id,
+                    cfg.dataset.fps,
+                    root=cfg.dataset.root,
+                    robot_type=robot.name,
+                    features=dataset_features,
+                    use_videos=cfg.dataset.video,
+                    image_writer_processes=cfg.dataset.num_image_writer_processes,
+                    image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera
+                    * (len(robot.cameras) if hasattr(robot, "cameras") else 0),
+                    batch_encoding_size=cfg.dataset.video_encoding_batch_size,
+                )
+        except FileExistsError:
+            logging.error(f"Dataset directory for '{cfg.dataset.repo_id}' already exists in cache.")
+            logging.error("If you want to resume recording, add `--resume` to your command.")
+            logging.error("If you want to start a new recording, please delete the directory from your cache first.")
+            return None
 
         policy = None if cfg.policy is None else make_policy(cfg.policy, ds_meta=dataset.meta)
         preprocessor = None
@@ -362,23 +373,30 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
             recorded_episodes = 0
             while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
                 log_say(f"Recording episode {recorded_episodes + 1}/{cfg.dataset.num_episodes}", cfg.play_sounds)
-                record_loop(
-                    robot=robot,
-                    events=events,
-                    fps=cfg.dataset.fps,
-                    teleop_action_processor=teleop_action_processor,
-                    robot_action_processor=robot_action_processor,
-                    robot_observation_processor=robot_observation_processor,
-                    teleop=teleop,
-                    policy=policy,
-                    preprocessor=preprocessor,
-                    postprocessor=postprocessor,
-                    dataset=dataset,
-                    control_time_s=cfg.dataset.episode_time_s,
-                    single_task=cfg.dataset.single_task,
-                    display_data=cfg.display_data,
-                    use_intervention=use_intervention,
-                )
+                try:
+                    record_loop(
+                        robot=robot,
+                        events=events,
+                        fps=cfg.dataset.fps,
+                        teleop_action_processor=teleop_action_processor,
+                        robot_action_processor=robot_action_processor,
+                        robot_observation_processor=robot_observation_processor,
+                        teleop=teleop,
+                        policy=policy,
+                        preprocessor=preprocessor,
+                        postprocessor=postprocessor,
+                        dataset=dataset,
+                        control_time_s=cfg.dataset.episode_time_s,
+                        single_task=cfg.dataset.single_task,
+                        display_data=cfg.display_data,
+                        use_intervention=use_intervention,
+                        obs_image_name_map=obs_image_name_map,
+                    )
+                except Exception:
+                    logging.exception("Exception in record_loop")
+                    traceback.print_exc(file=sys.stderr) # Explicitly print traceback
+                    # Force stop recording
+                    events["stop_recording"] = True
 
                 if not events["stop_recording"] and (
                     (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
@@ -392,11 +410,11 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                         teleop_action_processor=teleop_action_processor,
                         robot_action_processor=robot_action_processor,
                         robot_observation_processor=robot_observation_processor,
-                        teleop=teleop, # Teleop can be used for manual reset if no policy
-                        policy=None, # Policy is explicitly not used during reset phase
+                        teleop=teleop,  # Teleop can be used for manual reset if no policy
+                        policy=None,  # Policy is explicitly not used during reset phase
                         preprocessor=None,
                         postprocessor=None,
-                        dataset=None, # No recording during reset phase
+                        dataset=None,  # No recording during reset phase
                         control_time_s=cfg.dataset.reset_time_s,
                         single_task=cfg.dataset.single_task,
                         display_data=cfg.display_data,
@@ -426,7 +444,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
         if not is_headless() and listener:
             listener.stop()
 
-        if cfg.dataset.push_to_hub:
+        if cfg.dataset.push_to_hub and dataset:
             dataset.push_to_hub(tags=cfg.dataset.tags, private=cfg.dataset.private)
 
         # Explicitly shutdown rclpy if it was initialized for Meta Quest

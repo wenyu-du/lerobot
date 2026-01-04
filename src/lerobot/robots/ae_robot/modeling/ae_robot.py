@@ -113,12 +113,24 @@ class AERobot(Robot):
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
-        try:
-            # Check if server is running
-            response = requests.post(f"{self.config.server_url}/getstate")
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            raise DeviceNotConnectedError(f"Failed to connect to ae_server at {self.config.server_url}: {e}")
+        last_exception = None
+        for attempt in range(3):
+            try:
+                # Check if server is running
+                response = requests.post(f"{self.config.server_url}/getstate")
+                response.raise_for_status()
+                
+                # If we get a successful response, break the loop
+                logger.info(f"Successfully connected to ae_server on attempt {attempt + 1}.")
+                last_exception = None
+                break
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                logger.warning(f"Connection attempt {attempt + 1} failed: {e}. Retrying in 1 second...")
+                time.sleep(1)
+        
+        if last_exception is not None:
+            raise DeviceNotConnectedError(f"Failed to connect to ae_server at {self.config.server_url} after multiple attempts: {last_exception}")
 
         # Start impedance control
         try:

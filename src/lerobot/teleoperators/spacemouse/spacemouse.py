@@ -322,11 +322,13 @@ class BiSpaceMouse(Teleoperator):
         self._is_connected = False
         logger.info(f"{self} disconnected.")
 
-    def get_action(self) -> dict[str, np.ndarray]:
+    def get_action(self) -> dict[str, float | np.ndarray]:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
         all_actions_buttons = self.expert.get_actions()
+
+        action_dict = {}
 
         left_action_6d = np.zeros(6)
         left_gripper_action = 0.0
@@ -345,12 +347,23 @@ class BiSpaceMouse(Teleoperator):
             if buttons_sm1[0]: right_gripper_action = -1.0
             elif buttons_sm1[1]: right_gripper_action = 1.0
 
-        return {
-            "left/delta_tcp_pose": left_action_6d,
-            "left/gripper_action": np.array([left_gripper_action]),
-            "right/delta_tcp_pose": right_action_6d,
-            "right/gripper_action": np.array([right_gripper_action]),
-        }
+        action_dict["left/delta_tcp_pose_x"] = left_action_6d[0]
+        action_dict["left/delta_tcp_pose_y"] = left_action_6d[1]
+        action_dict["left/delta_tcp_pose_z"] = left_action_6d[2]
+        action_dict["left/delta_tcp_pose_roll"] = left_action_6d[3]
+        action_dict["left/delta_tcp_pose_pitch"] = left_action_6d[4]
+        action_dict["left/delta_tcp_pose_yaw"] = left_action_6d[5]
+        action_dict["left/gripper_action"] = float(left_gripper_action)
+
+        action_dict["right/delta_tcp_pose_x"] = right_action_6d[0]
+        action_dict["right/delta_tcp_pose_y"] = right_action_6d[1]
+        action_dict["right/delta_tcp_pose_z"] = right_action_6d[2]
+        action_dict["right/delta_tcp_pose_roll"] = right_action_6d[3]
+        action_dict["right/delta_tcp_pose_pitch"] = right_action_6d[4]
+        action_dict["right/delta_tcp_pose_yaw"] = right_action_6d[5]
+        action_dict["right/gripper_action"] = float(right_gripper_action)
+
+        return action_dict
 
     def get_raw_action(self) -> Tuple[np.ndarray, list]:
         """

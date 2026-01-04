@@ -15,21 +15,25 @@ robot:
         }
     gripper_open_width: 0.09                # Custom gripper open width for the left arm
     cameras:                                # Custom camera configuration for the left arm
-      left_wrist_cam:
+      wrist_cam:
         type: opencv
-        index_or_path: 0
+        index_or_path: 2
         width: 640
         height: 480
         fps: 30
   right_arm_config:
     server_url: "http://192.168.2.22:5002" # IP address for the right arm's server
     action_scale: [0.04, 0.9, 1.0]           # Custom action scale for the right arm
-    reset_pose: [0.35, -0.1, 0.25, 3.14, 0.0, 0.0] # Custom reset pose for the right arm
+    reset_pose: [0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44] # Custom reset pose for the left arm
+    workspace_limits: {
+            "low":[0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44],
+            "high":[0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44],
+    }
     gripper_close_width: 0.01               # Custom gripper close width for the right arm
     cameras:                                # Custom camera configuration for the right arm
-      right_wrist_cam:
+      wrist_cam:
         type: opencv
-        index_or_path: 1
+        index_or_path: 6
         width: 640
         height: 480
         fps: 30

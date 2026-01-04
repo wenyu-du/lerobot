@@ -177,6 +177,7 @@ class OpenCVCamera(Camera):
                 self.read()
                 time.sleep(0.1)
 
+        self._start_read_thread()
         logger.info(f"{self} connected.")
 
     def _configure_capture_settings(self) -> None:

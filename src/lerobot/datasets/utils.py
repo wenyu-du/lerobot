@@ -602,7 +602,7 @@ def _validate_feature_names(features: dict[str, dict]) -> None:
 
 def hw_to_dataset_features(
     hw_features: dict[str, type | tuple], prefix: str, use_video: bool = True
-) -> dict[str, dict]:
+) -> tuple[dict[str, dict], dict[str, str]]:
     """Convert hardware-specific features to a LeRobot dataset feature dictionary.
 
     This function takes a dictionary describing hardware outputs (like joint states
@@ -617,9 +617,11 @@ def hw_to_dataset_features(
         use_video (bool): If True, image features are marked as "video", otherwise "image".
 
     Returns:
-        dict: A LeRobot features dictionary.
+        tuple[dict, dict]: A tuple containing the LeRobot features dictionary and a
+                           mapping from sanitized image names to original image names.
     """
     features = {}
+    sanitized_to_original_image_name_map = {}
     joint_fts = {
         key: ftype
         for key, ftype in hw_features.items()
@@ -648,13 +650,17 @@ def hw_to_dataset_features(
             "shape": shape,
             "names": ["height", "width", "channels"],
         }
+        sanitized_to_original_image_name_map[sanitized_key] = key
 
     _validate_feature_names(features)
-    return features
+    return features, sanitized_to_original_image_name_map
 
 
 def build_dataset_frame(
-    ds_features: dict[str, dict], values: dict[str, Any], prefix: str
+    ds_features: dict[str, dict],
+    values: dict[str, Any],
+    prefix: str,
+    obs_image_name_map: dict[str, str] | None = None,
 ) -> dict[str, np.ndarray]:
     """Construct a single data frame from raw values based on dataset features.
 
@@ -666,6 +672,8 @@ def build_dataset_frame(
         values (dict): A dictionary of raw values from the hardware/environment.
         prefix (str): The prefix to filter features by (e.g., "observation"
             or "action").
+        obs_image_name_map (dict, optional): A mapping from sanitized image names (from ds_features)
+                                              to original image names (in values). Required for image/video features.
 
     Returns:
         dict: A dictionary representing a single frame of data.
@@ -677,7 +685,14 @@ def build_dataset_frame(
         elif ft["dtype"] == "float32" and len(ft["shape"]) == 1:
             frame[key] = np.array([values[name] for name in ft["names"]], dtype=np.float32)
         elif ft["dtype"] in ["image", "video"]:
-            frame[key] = values[key.removeprefix(f"{prefix}.images.")]
+            if obs_image_name_map is None:
+                raise ValueError(
+                    f"obs_image_name_map must be provided for image/video features but is None. "
+                    f"Attempting to build frame for feature: {key}"
+                )
+            camera_name_in_ds_features = key.removeprefix(f"{prefix}.images.")
+            original_camera_name = obs_image_name_map[camera_name_in_ds_features]
+            frame[key] = values[original_camera_name]
 
     return frame
 

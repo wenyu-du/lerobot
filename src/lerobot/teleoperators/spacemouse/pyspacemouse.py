@@ -674,9 +674,18 @@ _active_device = None
 
 
 def close():
-    """Close the active device, if it exists"""
+    """Close the active device(s), if they exist"""
+    global _active_device
     if _active_device is not None:
-        _active_device.close()
+        if isinstance(_active_device, list):
+            for device_spec in _active_device:
+                if device_spec.connected:
+                    device_spec.close()
+            _active_device = None
+        else:
+            if _active_device.connected:
+                _active_device.close()
+            _active_device = None
 
 
 def read():
@@ -750,7 +759,7 @@ def open(
         set_nonblocking_loop=True,
         device: str = None,
         path: str = None,
-        DeviceNumber=0) -> Union[None, DeviceSpec]:
+        DeviceNumber=0) -> Union[None, DeviceSpec, List[DeviceSpec]]:
     """
     Open a 3D space navigator device. Makes this device the current active device, which enables the module-level read() and close()
     calls. For multiple devices, use the read() and close() calls on the returned object instead, and don't use the module-level calls.
@@ -772,97 +781,87 @@ def open(
     # only used if the module-level functions are used
     global _active_device
 
-    # if no device name specified, look for any matching device and choose the first
-    if device is None:
-        all_devices = list_devices()
-        if len(all_devices) > 0:
-            device = all_devices[0]
-        else:
-            raise Exception("No device connected/supported!")
-
-    found_devices = []
     hid = Enumeration()
     all_hids = hid.find()
-    if all_hids:
-        for dev in all_hids:
-            if path:
-                dev.path = path
-            spec = device_specs[device]
-            if dev.vendor_id == spec.hid_id[0] and dev.product_id == spec.hid_id[1]:
-                found_devices.append({"Spec": spec, "HIDDevice": dev})
-                print(f"{device} found")
-    
-
-    else:
+    if not all_hids:
         print("No HID devices detected")
         return None
 
+    found_devices = []
+    if device is None:
+        # For BiSpaceMouse: find all supported devices
+        for dev in all_hids:
+            if path:
+                dev.path = path
+            for device_name, spec in device_specs.items():
+                if dev.vendor_id == spec.hid_id[0] and dev.product_id == spec.hid_id[1]:
+                    found_devices.append({"Spec": spec, "HIDDevice": dev})
+    else:
+        # For SingleSpaceMouse: find a specific device type
+        if device not in device_specs:
+            raise ValueError(f"Device '{device}' is not in the list of supported devices.")
+        spec = device_specs[device]
+        for dev in all_hids:
+            if path:
+                dev.path = path
+            if dev.vendor_id == spec.hid_id[0] and dev.product_id == spec.hid_id[1]:
+                found_devices.append({"Spec": spec, "HIDDevice": dev})
+
     if not found_devices:
+        if device is None:
+            raise Exception("No device connected/supported!")
         print("No supported devices found")
         return None
-    else:
-        if len(found_devices) <= DeviceNumber:
-            DeviceNumber = 0
+
+    # This special case for 6 interfaces seems to be for a BiSpaceMouse setup where each device creates 3 interfaces.
+    # The user's debug output shows exactly 6 "SpaceMouse Compact" interfaces.
+    if len(found_devices) == 6 and device is None:
+        check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+        opened_devices = []
         
-        if len(found_devices) == 6:
-            check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-            opened_devices = []
-            
-            # Try to open the first device
+        for dev_info in found_devices:
+            if len(opened_devices) >= 2:
+                break # Found two, that's enough for BiSpaceMouse
             try:
-                spec = found_devices[0]["Spec"]
-                dev0 = found_devices[0]["HIDDevice"]
-                new_device0 = copy.deepcopy(spec)
-                new_device0.device = dev0
-                new_device0.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-                new_device0.open()
-                new_device0.set_nonblocking_loop = set_nonblocking_loop
-                dev0.set_nonblocking(set_nonblocking_loop)
-                opened_devices.append(new_device0)
-            except Exception:
-                # This is not a warning because some interfaces are not meant to be opened.
-                pass
-
-            # Try to open the second device
-            try:
-                spec = found_devices[3]["Spec"]
-                dev1 = found_devices[3]["HIDDevice"]
-                new_device1 = copy.deepcopy(spec)
-                new_device1.device = dev1
-                new_device1.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-                new_device1.open()
-                new_device1.set_nonblocking_loop = set_nonblocking_loop
-                dev1.set_nonblocking(set_nonblocking_loop)
-                opened_devices.append(new_device1)
-            except Exception:
-                # This is not a warning because some interfaces are not meant to be opened.
-                pass
-
-            if not opened_devices:
-                return None
-
-            _active_device = opened_devices
-            return _active_device
-
-        if len(found_devices) > DeviceNumber:
-            check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
-            
-            # Try to open the specified device
-            try:
-                spec = found_devices[DeviceNumber]["Spec"]
-                dev = found_devices[DeviceNumber]["HIDDevice"]
+                spec = dev_info["Spec"]
+                hid_dev = dev_info["HIDDevice"]
                 new_device = copy.deepcopy(spec)
-                new_device.device = dev
+                new_device.device = hid_dev
                 new_device.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
                 new_device.open()
                 new_device.set_nonblocking_loop = set_nonblocking_loop
-                dev.set_nonblocking(set_nonblocking_loop)
-                
-                _active_device = [new_device]
-                return new_device
+                hid_dev.set_nonblocking(set_nonblocking_loop)
+                opened_devices.append(new_device)
             except Exception:
                 # This is not a warning because some interfaces are not meant to be opened.
-                return None
+                pass
+
+        if not opened_devices:
+            return None
+
+        _active_device = opened_devices
+        return _active_device
+
+    # This handles the single device case or other Bi-device configurations
+    if len(found_devices) > DeviceNumber:
+        check_config(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+        
+        # Try to open the specified device
+        try:
+            spec = found_devices[DeviceNumber]["Spec"]
+            dev = found_devices[DeviceNumber]["HIDDevice"]
+            new_device = copy.deepcopy(spec)
+            new_device.device = dev
+            new_device.config_set_sep(callback, dof_callback, dof_callback_arr, button_callback, button_callback_arr)
+            new_device.open()
+            new_device.set_nonblocking_loop = set_nonblocking_loop
+            dev.set_nonblocking(set_nonblocking_loop)
+            
+            _active_device = [new_device]
+            return new_device
+        except Exception:
+            # This is not a warning because some interfaces are not meant to be opened.
+            return None
 
     print("Unknown error occured.")
     return None

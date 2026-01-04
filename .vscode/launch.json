@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    {
+      "name": "Debug lerobot-record-aerobot",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "src/lerobot/scripts/lerobot_record_aerobot.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--robot.type=bi_ae_robot",
+        "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+        "--teleop.type=bi_spacemouse",
+        "--dataset.repo_id=\"wenyudu/test_ae_data\"",
+        "--dataset.single_task=\"用两只手臂推动方块\""
+      ]
+    }
+    ]
+}

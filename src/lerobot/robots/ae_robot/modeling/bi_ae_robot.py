@@ -153,6 +153,7 @@ class BiAERobot(Robot):
             dt_ms = (time.perf_counter() - start) * 1e3
             logger.debug(f"{self} read {cam_key}: {dt_ms:.1f}ms")
 
+        # logger.info(f"DEBUG: BiAERobot.get_observation() returning: {combined_obs.keys()}")
         return combined_obs
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
