@@ -59,9 +59,9 @@ class BiAERobot(Robot):
         # Combine observation features from both arms
         obs_features = {}
         for key, shape in self.left_arm.observation_features.items():
-            obs_features[f"left_{key}"] = shape
+            obs_features[f"left/{key}"] = shape
         for key, shape in self.right_arm.observation_features.items():
-            obs_features[f"right_{key}"] = shape
+            obs_features[f"right/{key}"] = shape
 
         # Add shared cameras
         for cam in self.cameras:
@@ -74,9 +74,9 @@ class BiAERobot(Robot):
         # Combine action features from both arms
         action_features = {}
         for key, shape in self.left_arm.action_features.items():
-            action_features[f"left_{key}"] = shape
+            action_features[f"left/{key}"] = shape
         for key, shape in self.right_arm.action_features.items():
-            action_features[f"right_{key}"] = shape
+            action_features[f"right/{key}"] = shape
         return action_features
 
     @property
@@ -142,9 +142,9 @@ class BiAERobot(Robot):
         # Combine observations with prefixes
         combined_obs = {}
         for key, val in left_obs.items():
-            combined_obs[f"left_{key}"] = val
+            combined_obs[f"left/{key}"] = val
         for key, val in right_obs.items():
-            combined_obs[f"right_{key}"] = val
+            combined_obs[f"right/{key}"] = val
 
         # Capture images from shared cameras
         for cam_key, cam in self.cameras.items():
@@ -164,12 +164,12 @@ class BiAERobot(Robot):
         left_action = {}
         right_action = {}
         for key, val in action.items():
-            if key.startswith("left_"):
-                left_action[key.removeprefix("left_")] = val
-            elif key.startswith("right_"):
-                right_action[key.removeprefix("right_")] = val
+            if key.startswith("left/"):
+                left_action[key[len("left/"):]] = val
+            elif key.startswith("right/"):
+                right_action[key[len("right/"):]] = val
             else:
-                logger.warning(f"Unexpected action key: {key} for BiAERobot. Ignoring. Expected 'left_' or 'right_' prefix.")
+                logger.warning(f"Unexpected action key: {key} for BiAERobot. Ignoring.")
 
         # Send actions to both arms in separate threads
         left_thread = threading.Thread(target=self.left_arm.send_action, args=(left_action,))

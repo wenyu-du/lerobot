@@ -193,9 +193,7 @@ def record_loop(
     control_time_s: int | None = None,
     single_task: str | None = None,
     display_data: bool = False,
-    use_intervention: bool = False,
-    obs_image_name_map: dict[str, str] | None = None,
-):
+    use_intervention: bool = False):
     if dataset is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset.fps} != {fps}).")
 
@@ -219,7 +217,7 @@ def record_loop(
         # Prepare observation for policy if needed
         observation_frame = None
         if dataset is not None:
-            observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR, obs_image_name_map=obs_image_name_map)
+            observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR)
 
 
         final_action_values = None
@@ -265,7 +263,7 @@ def record_loop(
         robot.send_action(robot_action_to_send)
 
         if dataset is not None:
-            action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION, obs_image_name_map=None)
+            action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION)
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
 
@@ -298,10 +296,10 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    action_features, _ = hw_to_dataset_features(
+    action_features = hw_to_dataset_features(
         robot.action_features, prefix=ACTION, use_video=cfg.dataset.video
     )
-    observation_features, obs_image_name_map = hw_to_dataset_features(
+    observation_features = hw_to_dataset_features(
         robot.observation_features, prefix=OBS_STR, use_video=cfg.dataset.video
     )
     dataset_features = combine_feature_dicts(action_features, observation_features)
@@ -389,8 +387,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                         control_time_s=cfg.dataset.episode_time_s,
                         single_task=cfg.dataset.single_task,
                         display_data=cfg.display_data,
-                        use_intervention=use_intervention,
-                        obs_image_name_map=obs_image_name_map,
+                        use_intervention=use_intervention
                     )
                 except Exception:
                     logging.exception("Exception in record_loop")
