@@ -7,33 +7,46 @@ robot:
   type: bi_ae_robot
   left_arm_config:
     server_url: "http://192.168.2.22:5003" # IP address for the left arm's server
-    action_scale: [0.06, 1.1, 1.0]           # Custom action scale for the left arm
-    reset_pose: [0.44351,0.223,0.534, -0.27,  -1.06 , -1.39] # Custom reset pose for the left arm
+    action_scale: [0.06, 0.05, 1.0]           # Custom action scale for the left arm
+    reset_pose: [0.44351,0.223,0.534, 3.08,  -0.96 , 1.44] # Custom reset pose for the left arm
     workspace_limits: {
-            "low": [0.44351,0.223,0.434, -0.27,  -1.06 , -1.39],
-            "high": [0.44351,0.223,0.634, -0.27,  -1.06 , -1.39],
+            "low": [0.22351,0.023,0.234, 2.5,  -1.3 , 1.0],
+            "high": [0.5351,0.223,0.534, 3.08,  -0.5 , 1.8],
         }
     gripper_open_width: 0.09                # Custom gripper open width for the left arm
     cameras:                                # Custom camera configuration for the left arm
       wrist_cam:
         type: opencv
-        index_or_path: 2
+        index_or_path: 10
+        width: 640
+        height: 480
+        fps: 30
+      side_cam:
+        type: opencv
+        index_or_path: 20
         width: 640
         height: 480
         fps: 30
   right_arm_config:
     server_url: "http://192.168.2.22:5002" # IP address for the right arm's server
-    action_scale: [0.04, 0.9, 1.0]           # Custom action scale for the right arm
+    action_scale: [0.04, 0.2, 1.0]           # Custom action scale for the right arm
     reset_pose: [0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44] # Custom reset pose for the left arm
     workspace_limits: {
-            "low":[0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44],
-            "high":[0.35469, -0.179459, -0.00100, 3.03, -1.23, -1.44],
+            "low":[0.30469, -0.229459, -0.00100, 3.03, -1.33, -1.60],
+            "high":[0.4469, -0.129459, -0.05100, 3.03, -0.7, -1.0],
     }
     gripper_close_width: 0.01               # Custom gripper close width for the right arm
     cameras:                                # Custom camera configuration for the right arm
       wrist_cam:
         type: opencv
-        index_or_path: 6
+        index_or_path: 16
         width: 640
         height: 480
         fps: 30
+      side_cam:
+        type: opencv
+        index_or_path: 4
+        width: 640
+        height: 480
+        fps: 30
+

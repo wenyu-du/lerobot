@@ -348,19 +348,19 @@ class BiSpaceMouse(Teleoperator):
             elif buttons_sm1[1]: right_gripper_action = 1.0
 
         action_dict["left_delta_tcp_pose_x"] = left_action_6d[0]
-        action_dict["left_delta_tcp_pose_y"] = left_action_6d[1]
-        action_dict["left_delta_tcp_pose_z"] = left_action_6d[2]
+        action_dict["left_delta_tcp_pose_y"] = -left_action_6d[2]
+        action_dict["left_delta_tcp_pose_z"] = left_action_6d[1]
         action_dict["left_delta_tcp_pose_roll"] = left_action_6d[3]
-        action_dict["left_delta_tcp_pose_pitch"] = left_action_6d[4]
-        action_dict["left_delta_tcp_pose_yaw"] = left_action_6d[5]
+        action_dict["left_delta_tcp_pose_pitch"] = -left_action_6d[5]
+        action_dict["left_delta_tcp_pose_yaw"] = left_action_6d[4]
         action_dict["left_gripper_action"] = float(left_gripper_action)
 
         action_dict["right_delta_tcp_pose_x"] = right_action_6d[0]
-        action_dict["right_delta_tcp_pose_y"] = right_action_6d[1]
-        action_dict["right_delta_tcp_pose_z"] = right_action_6d[2]
+        action_dict["right_delta_tcp_pose_y"] = right_action_6d[2]
+        action_dict["right_delta_tcp_pose_z"] = -right_action_6d[1]
         action_dict["right_delta_tcp_pose_roll"] = right_action_6d[3]
-        action_dict["right_delta_tcp_pose_pitch"] = right_action_6d[4]
-        action_dict["right_delta_tcp_pose_yaw"] = right_action_6d[5]
+        action_dict["right_delta_tcp_pose_pitch"] = right_action_6d[5]
+        action_dict["right_delta_tcp_pose_yaw"] = -right_action_6d[5]
         action_dict["right_gripper_action"] = float(right_gripper_action)
 
         return action_dict

@@ -265,8 +265,9 @@ class AERobot(Robot):
 
         target_pose_xyz = current_pose_xyz + delta_pose[:3] * self.config.action_scale[0]
 
-        delta_rot = R.from_euler("xyz", delta_pose[3:])
+        delta_rot = R.from_euler("xyz", delta_pose[3:]* self.config.action_scale[1])
         target_rot = delta_rot * current_rot
+        # target_rot =  current_rot * delta_rot
         target_pose_quat_xyzw = target_rot.as_quat()
 
         target_pose = np.concatenate([target_pose_xyz, target_pose_quat_xyzw])
