@@ -29,5 +29,6 @@ sudo rm -r ~/.cache/huggingface/lerobot/wenyudu/test_ae_data
 ```
 
 ```bash
-lerobot-record-aerobot     --robot.type=bi_ae_robot     --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml     --teleop.type=bi_spacemouse --dataset.repo_id="wenyudu/test_ae_data"     --dataset.single_task="test_ae_robot"  --dataset.num_episodes=2
+lerobot-record-aerobot     --robot.type=bi_ae_robot     --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml     --teleop.type=bi_spacemouse --dataset.single_task="test_ae_robot"  --dataset.num_episodes=2 --dataset.push_to_hub=false --dataset.episode_time_s=10 --dataset.fps=10 --dataset.repo_id="wenyudu/test_ae_data1ff1"
 ```
+   

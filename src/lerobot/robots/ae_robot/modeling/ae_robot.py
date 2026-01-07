@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 import requests
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as R, Slerp
 
 from lerobot.cameras.utils import make_cameras_from_configs
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -178,7 +178,7 @@ class AERobot(Robot):
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to send pose command: {e}")
 
-    def get_observation(self) -> dict[str, Any]:
+    def _get_robot_state(self) -> dict[str, Any]:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
@@ -209,9 +209,16 @@ class AERobot(Robot):
                 obs_dict["tcp_pose_yaw"] = euler[2]
 
             obs_dict["gripper_pos"] = state["gripper_pos"]
+            return obs_dict
 
         except requests.exceptions.RequestException as e:
             raise IOError(f"Failed to get observation from ae_server: {e}")
+
+    def get_observation(self) -> dict[str, Any]:
+        if not self.is_connected:
+            raise DeviceNotConnectedError(f"{self} is not connected.")
+
+        obs_dict = self._get_robot_state()
 
         # Capture images from cameras
         for cam_key, cam in self.cameras.items():
@@ -239,7 +246,7 @@ class AERobot(Robot):
         )
 
         # Get current pose
-        current_obs = self.get_observation()
+        current_obs = self._get_robot_state()
 
         current_pose_xyz = np.array([current_obs["tcp_pose_x"], current_obs["tcp_pose_y"], current_obs["tcp_pose_z"]])
 
@@ -335,6 +342,67 @@ class AERobot(Robot):
 
         return pose
 
+    def interpolate_move(self, goal_pose: np.ndarray, duration: float):
+        """Move the robot to the goal position with linear interpolation for position and slerp for orientation."""
+        if not self.is_connected:
+            raise DeviceNotConnectedError(f"{self} is not connected.")
+
+        hz = 10.0  # Control frequency for interpolation
+        steps = int(duration * hz)
+
+        # Get current pose efficiently
+        current_obs = self._get_robot_state()
+
+        if self.config.rotation_format == "quat":
+            start_pose_xyz = np.array(
+                [current_obs["tcp_pose_x"], current_obs["tcp_pose_y"], current_obs["tcp_pose_z"]]
+            )
+            start_pose_quat = np.array(
+                [
+                    current_obs["tcp_pose_qx"],
+                    current_obs["tcp_pose_qy"],
+                    current_obs["tcp_pose_qz"],
+                    current_obs["tcp_pose_qw"],
+                ]
+            )
+        else:
+            start_pose_xyz = np.array(
+                [current_obs["tcp_pose_x"], current_obs["tcp_pose_y"], current_obs["tcp_pose_z"]]
+            )
+            current_pose_euler = np.array(
+                [
+                    current_obs["tcp_pose_roll"],
+                    current_obs["tcp_pose_pitch"],
+                    current_obs["tcp_pose_yaw"],
+                ]
+            )
+            start_pose_quat = R.from_euler(self.config.rotation_format, current_pose_euler).as_quat()
+
+        if steps <= 0:
+            self._send_pose_command(goal_pose)
+            if duration > 0:
+                time.sleep(duration)
+            return
+
+        start_pose = np.concatenate([start_pose_xyz, start_pose_quat])
+
+        interp_fracs = (np.arange(steps, dtype=np.float64) + 1) / steps
+
+        # Linear interpolation for position
+        positions = start_pose[:3] + np.outer(interp_fracs, goal_pose[:3] - start_pose[:3])
+
+        # Spherical linear interpolation for orientation (quaternion)
+        key_rots = R.from_quat([start_pose[3:], goal_pose[3:]])
+        key_times = [0, 1]
+        slerp = Slerp(key_times, key_rots)
+        orientations = slerp(interp_fracs).as_quat()
+
+        path = np.concatenate([positions, orientations], axis=1)
+
+        for p in path:
+            self._send_pose_command(p)
+            time.sleep(1 / hz)
+
     def reset(self) -> None:
         """
         Resets the robot to its initial configuration and state.
@@ -369,7 +437,7 @@ class AERobot(Robot):
         # Move to reset pose
         reset_pose_euler = self.config.reset_pose
         reset_pose_quat = np.concatenate([reset_pose_euler[:3], R.from_euler("xyz", reset_pose_euler[3:]).as_quat()])
-        self._send_pose_command(reset_pose_quat, timeout=1.2) # Use timeout for reset movement
+        self.interpolate_move(reset_pose_quat, duration=self.config.reset_duration)
         logger.info("Robot moved to reset pose.")
 
         # Restore compliance parameters

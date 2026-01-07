@@ -362,6 +362,16 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
         if teleop is not None:
             teleop.connect()
 
+        # Automatic reset at the start for ae_robot and bi_ae_robot.
+        if robot.name in ["ae_robot", "bi_ae_robot"]:
+            log_say("Resetting robot to initial position.", cfg.play_sounds)
+            if robot.name == "bi_ae_robot":
+                robot.go_to_rest()
+            else:
+                robot.reset()
+            # Wait for the robot to settle.
+            time.sleep(1.0)
+
         listener, events = init_keyboard_listener()
 
         # Determine if intervention logic should be active
@@ -399,24 +409,34 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
                 ):
                     log_say("Reset the environment", cfg.play_sounds)
-                    # Reset phase never uses intervention, only primary teleop or no action
-                    record_loop(
-                        robot=robot,
-                        events=events,
-                        fps=cfg.dataset.fps,
-                        teleop_action_processor=teleop_action_processor,
-                        robot_action_processor=robot_action_processor,
-                        robot_observation_processor=robot_observation_processor,
-                        teleop=teleop,  # Teleop can be used for manual reset if no policy
-                        policy=None,  # Policy is explicitly not used during reset phase
-                        preprocessor=None,
-                        postprocessor=None,
-                        dataset=None,  # No recording during reset phase
-                        control_time_s=cfg.dataset.reset_time_s,
-                        single_task=cfg.dataset.single_task,
-                        display_data=cfg.display_data,
-                        use_intervention=False,
-                    )
+                    # For ae_robot and bi_ae_robot, perform an automatic reset.
+                    if robot.name in ["ae_robot", "bi_ae_robot"]:
+                        log_say("Automatically resetting robot for the next episode.", cfg.play_sounds)
+                        if robot.name == "bi_ae_robot":
+                            robot.go_to_rest()
+                        else:
+                            robot.reset()
+                        # Wait for the robot to settle.
+                        time.sleep(1.0)
+                    else:
+                        # For other robots, keep the original manual reset behavior.
+                        record_loop(
+                            robot=robot,
+                            events=events,
+                            fps=cfg.dataset.fps,
+                            teleop_action_processor=teleop_action_processor,
+                            robot_action_processor=robot_action_processor,
+                            robot_observation_processor=robot_observation_processor,
+                            teleop=teleop,  # Teleop can be used for manual reset if no policy
+                            policy=None,  # Policy is explicitly not used during reset phase
+                            preprocessor=None,
+                            postprocessor=None,
+                            dataset=None,  # No recording during reset phase
+                            control_time_s=cfg.dataset.reset_time_s,
+                            single_task=cfg.dataset.single_task,
+                            display_data=cfg.display_data,
+                            use_intervention=False,
+                        )
 
                 if events["rerecord_episode"]:
                     log_say("Re-record episode", cfg.play_sounds)
