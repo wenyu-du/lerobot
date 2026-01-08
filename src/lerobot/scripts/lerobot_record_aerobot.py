@@ -75,14 +75,12 @@ from pprint import pformat
 from typing import Any
 import traceback # Added for explicit traceback printing
 
-import draccus
 import numpy as np
 
 from lerobot.cameras import CameraConfig
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 from lerobot.configs import parser
-from lerobot.configs.parser import filter_arg, parse_arg
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.datasets.image_writer import safe_stop_image_writer
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -276,6 +274,7 @@ def record_loop(
         timestamp = time.perf_counter() - start_episode_t
 
 
+@parser.wrap()
 def record(cfg: RecordConfig) -> LeRobotDataset:
     init_logging()
     logging.info(pformat(asdict(cfg)))
@@ -476,13 +475,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
 def main():
     register_third_party_devices()
-
-    cli_args = sys.argv[1:]
-    config_path_cli = parse_arg("config_path", cli_args)
-    filtered_cli_args = filter_arg("config_path", cli_args)
-
-    cfg = draccus.parse(config_class=RecordConfig, config_path=config_path_cli, args=filtered_cli_args)
-    record(cfg)
+    record()
 
 
 if __name__ == "__main__":
