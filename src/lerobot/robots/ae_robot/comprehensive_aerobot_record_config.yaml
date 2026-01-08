@@ -3,6 +3,9 @@
 #
 # lerobot-record-aerobot --config-path comprehensive_aerobot_record_config.yaml ...
 #
+
+# policy:
+#   path: home/ae/project/lerobot/outputs/pi05_ae_260107_alpha/checkpoints/020000/pretrained_model
 robot:
   type: bi_ae_robot
   left_arm_config:
@@ -11,7 +14,7 @@ robot:
     reset_pose: [0.42351,0.223,0.3, 3.08,  -0.96 , 1.6] # Custom reset pose for the left arm
     workspace_limits: {
             "low": [0.25351,0.023,0.04, 3.08,  -1.4 , 1.6],
-            "high": [0.4851,0.2886857331173238,0.3469930313903671, 3.08,  -0.5 , 1.6],
+            "high": [0.4851,0.2986857331173238,0.3469930313903671, 3.08,  -0.5 , 1.6],
         }
     gripper_open_width: 0.04                # Custom gripper open width for the left arm
     cameras:                                # Custom camera configuration for the left arm

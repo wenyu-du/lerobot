@@ -243,6 +243,7 @@ def record_loop(
                 task=single_task,
                 robot_type=robot.robot_type,
             )
+            final_action_values = make_robot_action(final_action_values, dataset.features)
         elif teleop is not None: # No policy, so teleop is the primary control
             act = teleop.get_action()
             final_action_values = teleop_action_processor((act, obs))
@@ -344,6 +345,8 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
             return None
 
         policy = None if cfg.policy is None else make_policy(cfg.policy, ds_meta=dataset.meta)
+        logging.info(f"Policy loaded: {type(policy)}")  
+        logging.info(f"Policy device: {policy.config.device}")
         preprocessor = None
         postprocessor = None
         if cfg.policy is not None:
@@ -355,6 +358,8 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     "device_processor": {"device": cfg.policy.device},
                     "rename_observations_processor": {"rename_map": cfg.dataset.rename_map},
                 },
+                to_robot_action=True,
+                action_features=action_features,
             )
 
         robot.connect()

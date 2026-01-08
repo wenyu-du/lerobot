@@ -41,7 +41,7 @@ class AERobotArmConfig:
     reset_pose: list[float] = field(default_factory=lambda: [0.3, 0.0, 0.2, 3.14, 0.0, 0.0])
 
     # Duration for the reset movement, in seconds.
-    reset_duration: float = 5
+    reset_duration: float = 1.2
 
     # Rotation format for tcp_pose observation ("quat", "xyz", "zyx")
     rotation_format: str = "xyz"
