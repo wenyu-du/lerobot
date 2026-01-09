@@ -64,6 +64,17 @@ lerobot-record-aerobot \
     --dataset.repo_id="<my_username>/<my_dataset_name>" \
     --dataset.single_task="Push the cube with two arms"
 ```
+
+Example: Record with a policy and get new tasks interactively.
+
+```shell
+lerobot-record-aerobot \
+    --robot.type=bi_ae_robot \
+    --policy.path=<path_to_policy> \
+    --dataset.repo_id="<my_username>/<my_dataset_name>" \
+    --dataset.single_task="Initial task description" \
+    --interactive
+```
 """
 
 import logging
@@ -159,6 +170,7 @@ class RecordConfig:
     display_data: bool = False
     play_sounds: bool = True
     resume: bool = False
+    interactive: bool = False
 
     def __post_init__(self):
         policy_path = parser.get_path_arg("policy")
@@ -383,8 +395,12 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
         with VideoEncodingManager(dataset):
             recorded_episodes = 0
+            current_task = cfg.dataset.single_task
             while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
                 log_say(f"Recording episode {recorded_episodes + 1}/{cfg.dataset.num_episodes}", cfg.play_sounds)
+                if cfg.interactive:
+                    log_say(f'Current task: "{current_task}"', cfg.play_sounds)
+
                 try:
                     record_loop(
                         robot=robot,
@@ -399,13 +415,13 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                         postprocessor=postprocessor,
                         dataset=dataset,
                         control_time_s=cfg.dataset.episode_time_s,
-                        single_task=cfg.dataset.single_task,
+                        single_task=current_task,
                         display_data=cfg.display_data,
-                        use_intervention=use_intervention
+                        use_intervention=use_intervention,
                     )
                 except Exception:
                     logging.exception("Exception in record_loop")
-                    traceback.print_exc(file=sys.stderr) # Explicitly print traceback
+                    traceback.print_exc(file=sys.stderr)  # Explicitly print traceback
                     # Force stop recording
                     events["stop_recording"] = True
 
@@ -437,7 +453,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                             postprocessor=None,
                             dataset=None,  # No recording during reset phase
                             control_time_s=cfg.dataset.reset_time_s,
-                            single_task=cfg.dataset.single_task,
+                            single_task=current_task,
                             display_data=cfg.display_data,
                             use_intervention=False,
                         )
@@ -451,6 +467,14 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
                 dataset.save_episode()
                 recorded_episodes += 1
+
+                if cfg.interactive:
+                    if recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
+                        new_task = input("Enter the next task description (or press Enter to stop): ")
+                        if not new_task:
+                            log_say("Empty task, stopping recording.", cfg.play_sounds)
+                            break
+                        current_task = new_task
     finally:
         log_say("Stop recording", cfg.play_sounds, blocking=True)
 
