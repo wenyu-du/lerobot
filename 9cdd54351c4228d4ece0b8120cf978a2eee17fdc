@@ -1,0 +1,1 @@
+fix: 解决 --policy.path 无法识别的问题。通过parser.wrap() 中的函数来处理输入路径并在post_init 中加载策略，
