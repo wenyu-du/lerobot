@@ -1,0 +1,90 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "Training_data",
+            "type": "promptString",
+            "description": "Please enter the training data's repo id",
+            "default": "wenyudu/demo_$(date +%y%m%d%H%M)_ae"
+        },        
+        {
+            "id": "singleTask",
+            "type": "promptString",
+            "description": "Please enter the task description",
+            "default": "pick the black cable, then place into the fixture"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "ae robot recording",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "src/lerobot/scripts/lerobot_record_aerobot.py",
+                "--robot.type=bi_ae_robot",
+                "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+                "--teleop.type=bi_spacemouse",
+                "--dataset.single_task=${input:singleTask}",
+                "--dataset.num_episodes=20",
+                "--dataset.push_to_hub=true",
+                "--dataset.episode_time_s=60",
+                "--dataset.reset_time_s=2",
+                "--dataset.fps=10",
+                "--dataset.repo_id=wenyudu/demo_pi05_$(date +%y%m%d%H%M)"
+            ],
+            "problemMatcher": [],
+            "cwd": "/home/bjae/project/lerobot",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "ae robot training",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "src/lerobot/scripts/lerobot_train.py",
+                "--robot.type=bi_ae_robot",
+                "--policy.type=pi05",
+                "--output_dir=./outputs/pi05_ae_$(date +%y%m%d%H%M)",
+                "--job_name=pi05_ae_$(date +%y%m%d%H%M)_training",
+                "--policy.repo_id=wenyudu/pi05_ae_$(date +%y%m%d%H%M)",
+                "--policy.pretrained_path=/home/ae/project/lerobot/outputs/pi05_ae_$(date +%y%m%d%H%M)_alpha/checkpoints/020000/pretrained_model",
+                "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+                "--policy.compile_model=true",
+                "--policy.gradient_checkpointing=true",
+                "--wandb.enable=true",
+                "--policy.dtype=bfloat16",
+                "--steps=20000",
+                "--policy.scheduler_decay_steps=20000",
+                "--policy.device=cuda",
+                "--batch_size=8",
+                "--wandb.enable=true",
+                "--dataset.repo_id=${input:Training_data}"
+            ],
+            "problemMatcher": [],
+            "cwd": "/home/bjae/project/lerobot"
+        },
+        {
+            "label": "ae robot reference",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "src/lerobot/scripts/lerobot_record_aerobot.py",
+                "--robot.type=bi_ae_robot",
+                "--policy.path=/home/ae/project/lerobot/outputs/pi05_ae_$(date +%y%m%d%H%M)_alpha/checkpoints/020000/pretrained_model",
+                "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+                "--dataset.single_task=${input:singleTask}",
+                "--dataset.num_episodes=10",
+                "--dataset.push_to_hub=true",
+                "--dataset.episode_time_s=60",
+                "--dataset.reset_time_s = 2",
+                "--dataset.fps=10",
+                "--dataset.repo_id=wenyudu/eval_pi05_$(date +%y%m%d%H%M)"
+            ],
+            "problemMatcher": [],
+            "cwd": "/home/bjae/project/lerobot"
+        }
+    ]
+}

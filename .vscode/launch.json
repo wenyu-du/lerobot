@@ -6,17 +6,24 @@
     "configurations": [
     {
       "name": "Debug lerobot-record-aerobot",
-      "type": "debugpy",
+      "type": "python",
       "request": "launch",
       "program": "src/lerobot/scripts/lerobot_record_aerobot.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
+      "justMyCode": true,
+      "stopOnEntry": false,
       "args": [
         "--robot.type=bi_ae_robot",
         "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
         "--teleop.type=bi_spacemouse",
-        "--dataset.repo_id=\"wenyudu/test_ae_data\"",
-        "--dataset.single_task=\"用两只手臂推动方块\""
+        "--dataset.repo_id=\"wenynoteudu/test_ae_data\"",
+        "--dataset.single_task=\"用两只手臂推动方块\"",
+        "--dataset.num_episodes=20",
+        "--dataset.push_to_hub=true", 
+        "--dataset.episode_time_s=60",
+        "--dataset.fps=10", 
+        "--dataset.repo_id=\"wenyudu/260107_ae_alpha\""
       ]
     }
     ]
