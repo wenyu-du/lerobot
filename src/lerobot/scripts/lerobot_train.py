@@ -18,7 +18,8 @@ import time
 from contextlib import nullcontext
 from pprint import pformat
 from typing import Any
-
+import os  
+os.environ["WANDB_API_KEY"] = "local-28270fa613c79ab8a5cbe2790a08485126444a2c"
 import torch
 from accelerate import Accelerator
 from termcolor import colored

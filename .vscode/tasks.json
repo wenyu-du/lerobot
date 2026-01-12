@@ -4,14 +4,25 @@
         {
             "id": "Training_data",
             "type": "promptString",
-            "description": "Please enter the training data's repo id",
-            "default": "wenyudu/demo_$(date +%y%m%d%H%M)_ae"
+            "description": "Please enter the training data's repo id"
         },        
         {
             "id": "singleTask",
             "type": "promptString",
             "description": "Please enter the task description",
             "default": "pick the black cable, then place into the fixture"
+        },
+        {
+            "id": "DateSuffix",
+            "type": "promptString",
+            "description": "Please enter a date suffix (e.g., YYMMDDHHMM) for output directories and repo IDs.",
+            "default": "$(date +%y%m%d%H%M)"
+        },
+        {
+            "id": "PolicyPath",
+            "type": "promptString",
+            "description": "input the policy path for inference",
+            "default": "/home/ae/project/lerobot/outputs/pi05_ae_260109_3/checkpoints/020000/pretrained_model"
         }
     ],
     "tasks": [
@@ -30,10 +41,10 @@
                 "--dataset.episode_time_s=60",
                 "--dataset.reset_time_s=2",
                 "--dataset.fps=10",
-                "--dataset.repo_id=wenyudu/demo_pi05_$(date +%y%m%d%H%M)"
+                "--dataset.repo_id=wenyudu/demo_pi05_260109_1"
             ],
             "problemMatcher": [],
-            "cwd": "/home/bjae/project/lerobot",
+            "cwd": "/home/ae/project/lerobot",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -45,13 +56,11 @@
             "command": "${command:python.interpreterPath}",
             "args": [
                 "src/lerobot/scripts/lerobot_train.py",
-                "--robot.type=bi_ae_robot",
                 "--policy.type=pi05",
-                "--output_dir=./outputs/pi05_ae_$(date +%y%m%d%H%M)",
-                "--job_name=pi05_ae_$(date +%y%m%d%H%M)_training",
-                "--policy.repo_id=wenyudu/pi05_ae_$(date +%y%m%d%H%M)",
-                "--policy.pretrained_path=/home/ae/project/lerobot/outputs/pi05_ae_$(date +%y%m%d%H%M)_alpha/checkpoints/020000/pretrained_model",
-                "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+                "--output_dir=./outputs/pi05_ae_${input:DateSuffix}",
+                "--job_name=pi05_ae_${input:DateSuffix}_training",
+                "--policy.repo_id=wenyudu/pi05_ae_${input:DateSuffix}",
+                "--policy.pretrained_path=/home/ae/.cache/huggingface/hub/models--lerobot--pi05_base/snapshots/9e50c659e8a0a6a3625d111044d1566672399e95",
                 "--policy.compile_model=true",
                 "--policy.gradient_checkpointing=true",
                 "--wandb.enable=true",
@@ -64,7 +73,7 @@
                 "--dataset.repo_id=${input:Training_data}"
             ],
             "problemMatcher": [],
-            "cwd": "/home/bjae/project/lerobot"
+            "cwd": "/home/ae/project/lerobot"
         },
         {
             "label": "ae robot reference",
@@ -73,18 +82,20 @@
             "args": [
                 "src/lerobot/scripts/lerobot_record_aerobot.py",
                 "--robot.type=bi_ae_robot",
-                "--policy.path=/home/ae/project/lerobot/outputs/pi05_ae_$(date +%y%m%d%H%M)_alpha/checkpoints/020000/pretrained_model",
+                "--policy.path=${input:PolicyPath}",
                 "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
                 "--dataset.single_task=${input:singleTask}",
                 "--dataset.num_episodes=10",
                 "--dataset.push_to_hub=true",
-                "--dataset.episode_time_s=60",
-                "--dataset.reset_time_s = 2",
+                "--dataset.episode_time_s=120",
+                "--interactive=true",
+                "--dataset.reset_time_s=1",
                 "--dataset.fps=10",
-                "--dataset.repo_id=wenyudu/eval_pi05_$(date +%y%m%d%H%M)"
+                "--dataset.repo_id=wenyudu/eval_pi05_${input:DateSuffix}",
+                "--dataset.inference_only=true"
             ],
             "problemMatcher": [],
-            "cwd": "/home/bjae/project/lerobot"
-        }
+            "cwd": "/home/ae/project/lerobot"
+        } 
     ]
 }

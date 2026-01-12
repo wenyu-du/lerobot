@@ -24,13 +24,18 @@ sudo rm -r ~/.cache/huggingface/lerobot/wenyudu/260107_aess
 ```
 ### 录数据脚本
 ```bash
-lerobot-record-aerobot     --robot.type=bi_ae_robot     --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml     --teleop.type=bi_spacemouse --dataset.single_task="pick the black cable, then place into the fixture"  --dataset.num_episodes=20 --dataset.push_to_hub=true --dataset.episode_time_s=60 --dataset.fps=10 --dataset.repo_id="wenyudu/260107_ae_alpha"
+lerobot-record-aerobot     --robot.type=bi_ae_robot     --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml     --teleop.type=bi_spacemouse --dataset.single_task="pick the black cable, then place into the fixture"  --dataset.num_episodes=10 --dataset.push_to_hub=true --dataset.episode_time_s=120 --dataset.fps=10 --dataset.reset_time_s=1 --dataset.repo_id="wenyudu/260109_10"
 ```
 
 ```bash
 lerobot-teleoperate     --robot.type=bi_ae_robot     --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml     --teleop.type=bi_spacemouse --dataset.single_task="test_ae_robot"  --fps=1
 ```
+### merge data
 
+lerobot-edit-dataset \
+    --repo_id wenyudu/demo_pi05_20260109_merged \
+    --operation.type merge \
+    --operation.repo_ids "[ 'wenyudu/260109_alpha_2', 'wenyudu/260109_alpha_2']"
 
 ### 训练脚本
 ```bash
@@ -39,8 +44,10 @@ lerobot-train     --dataset.repo_id="wenyudu/260107_ae_alpha"      --policy.type
 
 ### 推理脚本
 ```bash
-lerobot-record-aerobot     --robot.type=bi_ae_robot      --policy.path=/home/ae/project/lerobot/outputs/pi05_ae_260107_alpha/checkpoints/020000/pretrained_model      --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml --dataset.single_task="pick the black cable, then place into the fixture"       --dataset.num_episodes=10      --dataset.push_to_hub=false      --dataset.episode_time_s=60      --dataset.fps=10      --dataset.repo_id="wenyudu/eval_pi05_01086" 
+lerobot-record-aerobot     --robot.type=bi_ae_robot      --policy.path=/home/ae/project/lerobot/outputs/pi05_ae_260107_alpha/checkpoints/020000/pretrained_model      --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml --dataset.single_task="pick the black cable, then place into the fixture"       --dataset.num_episodes=10      --dataset.push_to_hub=false      --dataset.episode_time_s=60      --dataset.fps=10   --dataset.reset_time_s=1   --dataset.repo_id="wenyudu/eval_pi05_01086" 
 ```
 
 **wandb api**
 local-28270fa613c79ab8a5cbe2790a08485126444a2c
+
+echo 'export WANDB_API_KEY="local-28270fa613c79ab8a5cbe2790a08485126444a2c"' >> ~/.bashrc  

@@ -150,6 +150,7 @@ class DatasetRecordConfig:
     video: bool = True
     push_to_hub: bool = True
     private: bool = False
+    inference_only: bool = False
     tags: list[str] | None = None
     num_image_writer_processes: int = 0
     num_image_writer_threads_per_camera: int = 4
@@ -203,7 +204,9 @@ def record_loop(
     control_time_s: int | None = None,
     single_task: str | None = None,
     display_data: bool = False,
-    use_intervention: bool = False):
+    use_intervention: bool = False,
+    inference_only: bool = False,
+):
     if dataset is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset.fps} != {fps}).")
 
@@ -273,7 +276,7 @@ def record_loop(
         robot_action_to_send = robot_action_processor((final_action_values, obs))
         robot.send_action(robot_action_to_send)
 
-        if dataset is not None:
+        if dataset is not None and not inference_only:
             action_frame = build_dataset_frame(dataset.features, final_action_values, prefix=ACTION)
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
@@ -357,8 +360,6 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
             return None
 
         policy = None if cfg.policy is None else make_policy(cfg.policy, ds_meta=dataset.meta)
-        logging.info(f"Policy loaded: {type(policy)}")  
-        logging.info(f"Policy device: {policy.config.device}")
         preprocessor = None
         postprocessor = None
         if cfg.policy is not None:
@@ -418,6 +419,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                         single_task=current_task,
                         display_data=cfg.display_data,
                         use_intervention=use_intervention,
+                        inference_only=cfg.dataset.inference_only,
                     )
                 except Exception:
                     logging.exception("Exception in record_loop")
@@ -465,7 +467,8 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     dataset.clear_episode_buffer()
                     continue
 
-                dataset.save_episode()
+                if not cfg.dataset.inference_only:
+                    dataset.save_episode()
                 recorded_episodes += 1
 
                 if cfg.interactive:
@@ -478,7 +481,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
     finally:
         log_say("Stop recording", cfg.play_sounds, blocking=True)
 
-        if dataset:
+        if dataset and not cfg.dataset.inference_only:
             dataset.finalize()
 
         if robot.is_connected:
@@ -489,7 +492,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
         if not is_headless() and listener:
             listener.stop()
 
-        if cfg.dataset.push_to_hub and dataset:
+        if cfg.dataset.push_to_hub and dataset and not cfg.dataset.inference_only:
             dataset.push_to_hub(tags=cfg.dataset.tags, private=cfg.dataset.private)
 
         # Explicitly shutdown rclpy if it was initialized for Meta Quest
