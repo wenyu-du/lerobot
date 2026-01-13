@@ -42,7 +42,7 @@ class SingleQuestExpertProcess:
     A separate process to handle ROS2 subscriptions for a single Meta Quest controller.
     """
 
-    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip):
+    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip, use_filter, ema_weight):
         rclpy.init(args=None)
         self.node = SingleQuestSubscriber(
             shared_action,
@@ -50,47 +50,27 @@ class SingleQuestExpertProcess:
             position_scale,
             rotation_scale,
             action_clip,
+            use_filter,
+            ema_weight,
         )
-        try:
-            rclpy.spin(self.node)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.node.destroy_node()
-            rclpy.shutdown()
 
 
 class SingleQuestSubscriber(Node):
     """ROS2 Node for subscribing to a Meta Quest left controller"""
 
-    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip):
+    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip, use_filter, ema_weight):
         super().__init__('single_quest_subscriber')
         self.shared_action = shared_action
         self.shared_buttons = shared_buttons
         self.position_scale = position_scale
         self.rotation_scale = rotation_scale
         self.action_clip = action_clip
+        self.use_filter = use_filter
+        if not 0.0 <= ema_weight <= 1.0:
+            raise ValueError(f"ema_weight must be between 0.0 and 1.0, but got {ema_weight}")
+        self.ema_weight = ema_weight
         self.filtered_delta = None
         self.pose_history = deque(maxlen=5)
-
-        pose_topic = '/left_controller_instant_delta'
-        button_topic = '/left_controller_command'
-
-        self.pose_subscription = self.create_subscription(
-            TransformStamped,
-            pose_topic,
-            self.pose_callback,
-            10
-        )
-
-        self.button_subscription = self.create_subscription(
-            Button,
-            button_topic,
-            self.button_callback,
-            10
-        )
-
-        self.get_logger().info('Initialized Meta Quest subscriber for left controller')
 
     def button_callback(self, msg: Button):
         self.shared_buttons[0] = 0
@@ -119,20 +99,26 @@ class SingleQuestSubscriber(Node):
 
         pose_delta = np.concatenate([position_delta, euler_delta])
 
-        self.pose_history.append(pose_delta)
-        if len(self.pose_history) == self.pose_history.maxlen:
-            history_array = np.array(list(self.pose_history))
-            filtered_pose_delta = np.median(history_array, axis=0)
-        else:
-            filtered_pose_delta = pose_delta
+        if self.use_filter:
+            self.pose_history.append(pose_delta)
+            if len(self.pose_history) == self.pose_history.maxlen:
+                history_array = np.array(list(self.pose_history))
+                filtered_pose_delta = np.median(history_array, axis=0)
+            else:
+                filtered_pose_delta = pose_delta
 
-        if self.filtered_delta is None:
-            self.filtered_delta = filtered_pose_delta
+            if self.filtered_delta is None:
+                self.filtered_delta = filtered_pose_delta
+            else:
+                self.filtered_delta = (
+                    self.filtered_delta * (1 - self.ema_weight) + filtered_pose_delta * self.ema_weight
+                )
+            delta_to_clip = self.filtered_delta
         else:
-            self.filtered_delta = self.filtered_delta * 0.95 + filtered_pose_delta * 0.05
+            delta_to_clip = pose_delta
 
         clipped_delta = np.clip(
-            self.filtered_delta,
+            delta_to_clip,
             -self.action_clip,
             self.action_clip
         )
@@ -152,6 +138,7 @@ class SingleMetaQuest(Teleoperator):
 
     def __init__(self, config: SingleMetaQuestConfig):
         super().__init__(config)
+        self.config = config
         if not is_rclpy_available():
             raise ImportError("rclpy is not installed. Please install ROS2 and `rclpy` to use the MetaQuest teleoperator.")
 
@@ -169,11 +156,28 @@ class SingleMetaQuest(Teleoperator):
             "gripper_action": (1,),  # binary open/close
         }
 
+    @cached_property
+    def feedback_features(self) -> dict[str, Any]:
+        return {}
+
+    @property
+    def is_calibrated(self) -> bool:
+        return True
+
+    def calibrate(self) -> None:
+        pass
+
+    def configure(self) -> None:
+        pass
+
+    def send_feedback(self, feedback: dict[str, Any]) -> None:
+        pass
+
     @property
     def is_connected(self) -> bool:
         return self._is_connected and (self.ros_process is not None and self.ros_process.is_alive())
 
-    def connect(self):
+    def connect(self, calibrate: bool = True):
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
@@ -185,6 +189,8 @@ class SingleMetaQuest(Teleoperator):
                 self.config.position_scale,
                 self.config.rotation_scale,
                 self.config.action_clip,
+                self.config.use_filter,
+                self.config.ema_weight,
             ),
             daemon=True,
         )
@@ -239,10 +245,15 @@ class SingleMetaQuest(Teleoperator):
         elif buttons[1]:
             gripper_action = 1.0
 
-        return {
-            "delta_tcp_pose": scaled_action,
-            "gripper_action": np.array([gripper_action]),
-        }
+        action_dict = {}
+        action_dict["delta_tcp_pose_x"] = scaled_action[0]
+        action_dict["delta_tcp_pose_y"] = scaled_action[1]
+        action_dict["delta_tcp_pose_z"] = scaled_action[2]
+        action_dict["delta_tcp_pose_roll"] = scaled_action[3]
+        action_dict["delta_tcp_pose_pitch"] = scaled_action[4]
+        action_dict["delta_tcp_pose_yaw"] = scaled_action[5]
+        action_dict["gripper_action"] = float(gripper_action)
+        return action_dict
 
     def get_raw_action(self) -> Tuple[np.ndarray, list]:
         """Returns the raw 6D action and 2-element button list from the Meta Quest."""
@@ -259,7 +270,7 @@ class BiQuestExpertProcess:
     A separate process to handle ROS2 subscriptions for two Meta Quest controllers.
     """
 
-    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip_left, action_clip_right):
+    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip_left, action_clip_right, use_filter, ema_weight):
         rclpy.init(args=None)
         self.node = BiQuestSubscriber(
             shared_action,
@@ -268,6 +279,8 @@ class BiQuestExpertProcess:
             rotation_scale,
             action_clip_left,
             action_clip_right,
+            use_filter,
+            ema_weight,
         )
         try:
             rclpy.spin(self.node)
@@ -281,7 +294,7 @@ class BiQuestExpertProcess:
 class BiQuestSubscriber(Node):
     """ROS2 Node for subscribing to two Meta Quest devices"""
 
-    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip_left, action_clip_right):
+    def __init__(self, shared_action, shared_buttons, position_scale, rotation_scale, action_clip_left, action_clip_right, use_filter, ema_weight):
         super().__init__('biquest_subscriber')
         self.shared_action = shared_action # 12D for 2 controllers
         self.shared_buttons = shared_buttons # 4D for 2 controllers
@@ -289,6 +302,10 @@ class BiQuestSubscriber(Node):
         self.rotation_scale = rotation_scale
         self.action_clip_left = action_clip_left
         self.action_clip_right = action_clip_right
+        self.use_filter = use_filter
+        if not 0.0 <= ema_weight <= 1.0:
+            raise ValueError(f"ema_weight must be between 0.0 and 1.0, but got {ema_weight}")
+        self.ema_weight = ema_weight
 
         self.filtered_deltas = [None, None] # [left, right]
         self.pose_history = [deque(maxlen=5), deque(maxlen=5)] # [left, right]
@@ -345,21 +362,28 @@ class BiQuestSubscriber(Node):
 
         pose_delta = np.concatenate([position_delta, euler_delta])
 
-        self.pose_history[device_idx].append(pose_delta)
-        if len(self.pose_history[device_idx]) == self.pose_history[device_idx].maxlen:
-            history_array = np.array(list(self.pose_history[device_idx]))
-            filtered_pose_delta = np.median(history_array, axis=0)
-        else:
-            filtered_pose_delta = pose_delta
+        if self.use_filter:
+            self.pose_history[device_idx].append(pose_delta)
+            if len(self.pose_history[device_idx]) == self.pose_history[device_idx].maxlen:
+                history_array = np.array(list(self.pose_history[device_idx]))
+                filtered_pose_delta = np.median(history_array, axis=0)
+            else:
+                filtered_pose_delta = pose_delta
 
-        if self.filtered_deltas[device_idx] is None:
-            self.filtered_deltas[device_idx] = filtered_pose_delta
+            if self.filtered_deltas[device_idx] is None:
+                self.filtered_deltas[device_idx] = filtered_pose_delta
+            else:
+                self.filtered_deltas[device_idx] = (
+                    self.filtered_deltas[device_idx] * (1 - self.ema_weight)
+                    + filtered_pose_delta * self.ema_weight
+                )
+            delta_to_clip = self.filtered_deltas[device_idx]
         else:
-            self.filtered_deltas[device_idx] = self.filtered_deltas[device_idx] * 0.95 + filtered_pose_delta * 0.05
+            delta_to_clip = pose_delta
 
         clip_value = self.action_clip_left if device_idx == 0 else self.action_clip_right
         clipped_delta = np.clip(
-            self.filtered_deltas[device_idx],
+            delta_to_clip,
             -clip_value,
             clip_value
         )
@@ -380,6 +404,7 @@ class BiMetaQuest(Teleoperator):
 
     def __init__(self, config: BiMetaQuestConfig):
         super().__init__(config)
+        self.config = config
         if not is_rclpy_available():
             raise ImportError("rclpy is not installed. Please install ROS2 and `rclpy` to use the MetaQuest teleoperator.")
 
@@ -393,17 +418,34 @@ class BiMetaQuest(Teleoperator):
     @cached_property
     def action_features(self) -> dict[str, Any]:
         return {
-            "left/delta_tcp_pose": (6,),
-            "left/gripper_action": (1,),
-            "right/delta_tcp_pose": (6,),
-            "right/gripper_action": (1,),
+            "left_delta_tcp_pose": (6,),
+            "left_gripper_action": (1,),
+            "right_delta_tcp_pose": (6,),
+            "right_gripper_action": (1,),
         }
+
+    @cached_property
+    def feedback_features(self) -> dict[str, Any]:
+        return {}
+
+    @property
+    def is_calibrated(self) -> bool:
+        return True
+
+    def calibrate(self) -> None:
+        pass
+
+    def configure(self) -> None:
+        pass
+
+    def send_feedback(self, feedback: dict[str, Any]) -> None:
+        pass
 
     @property
     def is_connected(self) -> bool:
         return self._is_connected and (self.ros_process is not None and self.ros_process.is_alive())
 
-    def connect(self):
+    def connect(self, calibrate: bool = True):
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
@@ -416,6 +458,8 @@ class BiMetaQuest(Teleoperator):
                 self.config.rotation_scale,
                 self.config.action_clip_left,
                 self.config.action_clip_right,
+                self.config.use_filter,
+                self.config.ema_weight,
             ),
             daemon=True,
         )
@@ -455,8 +499,8 @@ class BiMetaQuest(Teleoperator):
         left_action_raw = actions_12d[6:12] # Assuming right controller is device_idx=1 (index 6:12 in original)
         right_action_raw = actions_12d[0:6] # Assuming left controller is device_idx=0 (index 0:6 in original)
 
-        left_buttons = buttons_4d[0:2]
-        right_buttons = buttons_4d[2:4]
+        left_buttons = buttons_4d[2:4]
+        right_buttons = buttons_4d[0:2]
 
         # Apply transformations for left arm (from SingleMetaQuest)
         pos_delta_l = left_action_raw[:3]
@@ -496,12 +540,24 @@ class BiMetaQuest(Teleoperator):
         elif right_buttons[1]:  # Open gripper
             right_gripper_action = 1.0
 
-        return {
-            "left/delta_tcp_pose": left_action,
-            "left/gripper_action": np.array([left_gripper_action]),
-            "right/delta_tcp_pose": right_action,
-            "right/gripper_action": np.array([right_gripper_action]),
-        }
+        action_dict = {}
+        action_dict["left_delta_tcp_pose_x"] = left_action[0]
+        action_dict["left_delta_tcp_pose_y"] = -left_action[1]
+        action_dict["left_delta_tcp_pose_z"] = -left_action[2]
+        action_dict["left_delta_tcp_pose_roll"] = left_action[3]
+        action_dict["left_delta_tcp_pose_pitch"] = -left_action[4]
+        action_dict["left_delta_tcp_pose_yaw"] = -left_action[5]
+        action_dict["left_gripper_action"] = float(left_gripper_action)
+
+        action_dict["right_delta_tcp_pose_x"] = right_action[0]
+        action_dict["right_delta_tcp_pose_y"] = -right_action[1]
+        action_dict["right_delta_tcp_pose_z"] = -right_action[2]
+        action_dict["right_delta_tcp_pose_roll"] = right_action[3]
+        action_dict["right_delta_tcp_pose_pitch"] = -right_action[4]
+        action_dict["right_delta_tcp_pose_yaw"] = -right_action[5]
+        action_dict["right_gripper_action"] = float(right_gripper_action)
+
+        return action_dict
 
     def get_raw_action(self) -> Tuple[np.ndarray, list]:
         """Returns the raw 12D action and 4-element button list from the two Meta Quest controllers."""

@@ -34,14 +34,41 @@
                 "src/lerobot/scripts/lerobot_record_aerobot.py",
                 "--robot.type=bi_ae_robot",
                 "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
-                "--teleop.type=bi_spacemouse",
+                "--teleop.type=bi_meta_quest",
+                "--dataset.single_task=${input:singleTask}",
+                "--dataset.num_episodes=20",
+                "--dataset.push_to_hub=true",
+                "--dataset.episode_time_s=120",
+                "--dataset.reset_time_s=1",
+                "--dataset.fps=50",
+                "--dataset.repo_id=wenyudu/demo_pi05_${input:DateSuffix}",
+                "--display_data=true"
+            ],
+            "problemMatcher": [],
+            "cwd": "/home/ae/project/lerobot",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "ae robot recording_test (without saving)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "src/lerobot/scripts/lerobot_record_aerobot.py",
+                "--robot.type=bi_ae_robot",
+                "--config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml",
+                "--teleop.type=bi_meta_quest",
                 "--dataset.single_task=${input:singleTask}",
                 "--dataset.num_episodes=20",
                 "--dataset.push_to_hub=true",
                 "--dataset.episode_time_s=60",
                 "--dataset.reset_time_s=2",
-                "--dataset.fps=10",
-                "--dataset.repo_id=wenyudu/demo_pi05_260109_1"
+                "--dataset.fps=50",
+                "--dataset.inference_only=true",
+                "--display_data=true",
+                "--dataset.repo_id=wenyudu_test/demo_pi05_${input:DateSuffix}"
             ],
             "problemMatcher": [],
             "cwd": "/home/ae/project/lerobot",

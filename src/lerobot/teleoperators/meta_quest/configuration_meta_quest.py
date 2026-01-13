@@ -30,6 +30,8 @@ class SingleMetaQuestConfig(TeleoperatorConfig):
     action_clip: float = 1.0
     pos_action_scale: int = 500
     rot_action_scale: int = 80
+    use_filter: bool = True
+    ema_weight: float = 0.05
 
 
 @TeleoperatorConfig.register_subclass("bi_meta_quest")
@@ -42,7 +44,9 @@ class BiMetaQuestConfig(TeleoperatorConfig):
 
     position_scale: float = 1.0
     rotation_scale: float = 0.5
-    action_clip_left: float = 1.0
-    action_clip_right: float = 1.0
-    pos_action_scale: int = 500
-    rot_action_scale: int = 80
+    action_clip_left: float = 3.0
+    action_clip_right: float = 3.0
+    pos_action_scale: int = 195
+    rot_action_scale: int = 120
+    use_filter: bool = True
+    ema_weight: float = 0.1

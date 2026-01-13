@@ -120,6 +120,7 @@ from lerobot.teleoperators import (
     TeleoperatorConfig,
     make_teleoperator_from_config,
     spacemouse,
+    meta_quest,
 )
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import (
@@ -133,6 +134,7 @@ from lerobot.utils.import_utils import is_rclpy_available, register_third_party_
 from lerobot.utils.robot_utils import busy_wait as precise_sleep
 from lerobot.utils.utils import get_safe_torch_device, init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
+from lerobot.utils.action_visualizer import ActionVisualizer
 
 if is_rclpy_available():
     import rclpy
@@ -169,6 +171,7 @@ class RecordConfig:
     teleop: TeleoperatorConfig | None = None
     policy: PreTrainedConfig | None = None
     display_data: bool = False
+    visualize_action: bool = False
     play_sounds: bool = True
     resume: bool = False
     interactive: bool = False
@@ -297,6 +300,13 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
     if cfg.display_data:
         init_rerun(session_name="recording")
 
+    if cfg.visualize_action:
+        try:
+            action_visualizer = ActionVisualizer()
+        except ImportError:
+            logging.warning("matplotlib is not installed. Please `pip install matplotlib` to visualize actions.")
+            cfg.visualize_action = False
+
     # Initialize rclpy if Meta Quest teleop is used
     if cfg.teleop and (cfg.teleop.type == "meta_quest" or cfg.teleop.type == "bi_meta_quest"):
         if not is_rclpy_available():
@@ -307,6 +317,8 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
         pass
 
     robot = make_robot_from_config(cfg.robot)
+    if cfg.visualize_action:
+        robot.send_action = action_visualizer.decorate(robot.send_action)
     teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()

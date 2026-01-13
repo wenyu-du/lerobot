@@ -47,7 +47,24 @@ lerobot-train     --dataset.repo_id="wenyudu/260107_ae_alpha"      --policy.type
 lerobot-record-aerobot     --robot.type=bi_ae_robot      --policy.path=/home/ae/project/lerobot/outputs/pi05_ae_260107_alpha/checkpoints/020000/pretrained_model      --config_path=/home/ae/project/lerobot/src/lerobot/robots/ae_robot/comprehensive_aerobot_record_config.yaml --dataset.single_task="pick the black cable, then place into the fixture"       --dataset.num_episodes=10      --dataset.push_to_hub=false      --dataset.episode_time_s=60      --dataset.fps=10   --dataset.reset_time_s=1   --dataset.repo_id="wenyudu/eval_pi05_01086" 
 ```
 
+
+### Meta quest ros command
+```bash
+ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=192.168.2.6
+find /opt/ros/humble -name "libspdlog.so*
+dpkg -S /opt/ros/humble/lib/librcl_logging_spdlog.so
+apt-cache depends ros-humble-rcl-logging-spdlog
+```
+
+#### debug ros2 
+
+```bash
+ldd /opt/ros/humble/lib/librcl_logging_spdlog.so 查看动态链接库
+
+```
+
 **wandb api**
 local-28270fa613c79ab8a5cbe2790a08485126444a2c
 
 echo 'export WANDB_API_KEY="local-28270fa613c79ab8a5cbe2790a08485126444a2c"' >> ~/.bashrc  
+

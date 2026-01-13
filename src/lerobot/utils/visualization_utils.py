@@ -24,6 +24,17 @@ from .constants import OBS_PREFIX, OBS_STR
 
 def init_rerun(session_name: str = "lerobot_control_loop") -> None:
     """Initializes the Rerun SDK for visualizing the control loop."""
+    # The Rerun Viewer executable is sometimes not found in the PATH, even when the
+    # `rerun-sdk` is installed. This happens in environments where the Python
+    # executable's directory is not in the PATH. To fix this, we add it to the PATH.
+    import sys
+
+    python_executable_path = sys.executable
+    if python_executable_path:
+        bin_dir = os.path.dirname(python_executable_path)
+        if bin_dir not in os.environ["PATH"].split(os.pathsep):
+            os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+
     batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "8000")
     os.environ["RERUN_FLUSH_NUM_BYTES"] = batch_size
     rr.init(session_name)
