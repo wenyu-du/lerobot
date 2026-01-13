@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from lerobot.teleoperators.teleoperator import TeleoperatorConfig
 
@@ -22,9 +23,12 @@ from lerobot.teleoperators.teleoperator import TeleoperatorConfig
 class SingleSpaceMouseConfig(TeleoperatorConfig):
     """
     Configuration for a single 3Dconnexion SpaceMouse teleoperator.
+
+    Args:
+        scale: A float to scale the linear and angular velocities from the SpaceMouse.
     """
 
-    pass
+    scale: float = 1.0
 
 
 @TeleoperatorConfig.register_subclass("bi_spacemouse")
@@ -32,6 +36,9 @@ class SingleSpaceMouseConfig(TeleoperatorConfig):
 class BiSpaceMouseConfig(TeleoperatorConfig):
     """
     Configuration for dual-arm control using two 3Dconnexion SpaceMice.
+
+    Args:
+        scale: A list of floats to scale the linear and angular velocities from the two SpaceMice.
     """
 
-    pass
+    scale: List[float] = field(default_factory=lambda: [0.5, 1])

@@ -35,14 +35,17 @@ class SingleSpaceMouseExpert:
     a "get_action" method to get the latest action and button state.
     """
 
-    def __init__(self, device_number: int = 0):
+    def __init__(self, device_number: int = 0, scale: float = 1.0):
+        self.scale = scale
         try:
             self.devices = [pyspacemouse.open(DeviceNumber=device_number)]
             if not self.devices[0]:
-                 raise Exception("Could not open SpaceMouse device.")
+                raise Exception("Could not open SpaceMouse device.")
         except Exception as e:
             if "No device connected/supported" in str(e) or "Could not open SpaceMouse device." in str(e):
-                logger.warning(f"SpaceMouse (device {device_number}) not connected or supported. Running without SpaceMouse.")
+                logger.warning(
+                    f"SpaceMouse (device {device_number}) not connected or supported. Running without SpaceMouse."
+                )
                 self.process = None
                 self.manager = None
                 self.latest_data = None
@@ -53,7 +56,7 @@ class SingleSpaceMouseExpert:
         self.manager = multiprocessing.Manager()
         self.latest_data = self.manager.dict()
         self.latest_data["action"] = [0.0] * 6
-        self.latest_data["buttons"] = [0, 0] # Simplified to 2 buttons
+        self.latest_data["buttons"] = [0, 0]  # Simplified to 2 buttons
 
         self.process = multiprocessing.Process(target=self._read_spacemouse)
         self.process.daemon = True
@@ -64,15 +67,19 @@ class SingleSpaceMouseExpert:
             sm_state = self.devices[0].read()
             if not sm_state:
                 continue
-            
+
             # The raw action from pyspacemouse is (x, y, z, roll, pitch, yaw)
             # The provided example from copied_aerobot_rl_env/spacemouse/spacemouse_expert.py
             # uses (-state[0].y, state[0].x, state[0].z, -state[0].roll, -state[0].pitch, -state[0].yaw)
             action = [
-                -sm_state.y, sm_state.x, sm_state.z,
-                -sm_state.roll, -sm_state.pitch, -sm_state.yaw
+                -sm_state.y * self.scale,
+                sm_state.x * self.scale,
+                sm_state.z * self.scale,
+                -sm_state.roll * self.scale,
+                -sm_state.pitch * self.scale,
+                -sm_state.yaw * self.scale,
             ]
-            
+
             buttons = [0, 0]
             if len(sm_state.buttons) >= 2:
                 buttons = [sm_state.buttons[0], sm_state.buttons[1]]
@@ -107,7 +114,10 @@ class BiSpaceMouseExpert:
     a "get_action" method to get the latest action and button state for each.
     """
 
-    def __init__(self):
+    def __init__(self, scale: List[float] | None = None):
+        if scale is None:
+            scale = [1.0, 1.0]
+        self.scale = scale
         try:
             # pyspacemouse.open() with no DeviceNumber will try to open all.
             # It returns a list of DeviceSpec objects.
@@ -143,23 +153,28 @@ class BiSpaceMouseExpert:
             current_actions = []
             current_all_buttons = []
 
-            for sm_state in all_sm_states:
+            for i, sm_state in enumerate(all_sm_states):
                 if not sm_state:
                     current_actions.append([0.0] * 6)
                     current_all_buttons.append([0, 0])
                     continue
 
+                scale = self.scale[i] if i < len(self.scale) else 1.0
                 action = [
-                    -sm_state.y, sm_state.x, sm_state.z,
-                    -sm_state.roll, -sm_state.pitch, -sm_state.yaw
+                    -sm_state.y * scale,
+                    sm_state.x * scale,
+                    sm_state.z * scale,
+                    -sm_state.roll * scale,
+                    -sm_state.pitch * scale,
+                    -sm_state.yaw * scale,
                 ]
-                
+
                 buttons = [0, 0]
                 if len(sm_state.buttons) >= 2:
                     buttons = [sm_state.buttons[0], sm_state.buttons[1]]
                 elif len(sm_state.buttons) == 1:
                     buttons = [sm_state.buttons[0], 0]
-                
+
                 current_actions.append(action)
                 current_all_buttons.append(buttons)
 
@@ -196,7 +211,7 @@ class SingleSpaceMouse(Teleoperator):
 
     def __init__(self, config: SingleSpaceMouseConfig):
         super().__init__(config)
-        self.expert = SingleSpaceMouseExpert()
+        self.expert = SingleSpaceMouseExpert(scale=config.scale)
         self._is_connected = False
 
     @cached_property
@@ -282,7 +297,7 @@ class BiSpaceMouse(Teleoperator):
 
     def __init__(self, config: BiSpaceMouseConfig):
         super().__init__(config)
-        self.expert = BiSpaceMouseExpert()
+        self.expert = BiSpaceMouseExpert(scale=config.scale)
         self._is_connected = False
 
     @cached_property
