@@ -33,9 +33,9 @@ lerobot-teleoperate     --robot.type=bi_ae_robot     --config_path=/home/ae/proj
 ### merge data
 
 lerobot-edit-dataset \
-    --repo_id wenyudu/demo_pi05_20260109_merged \
+    --repo_id wenyudu/demo_pi05_260114_merged \
     --operation.type merge \
-    --operation.repo_ids "[ 'wenyudu/260109_alpha_2', 'wenyudu/260109_alpha_2']"
+    --operation.repo_ids "[ 'wenyudu/demo_pi05_260114_1534', 'wenyudu/demo_pi05_260114_1553', 'wenyudu/demo_pi05_260114_1605', 'wenyudu/demo_pi05_260114_1645']"
 
 ### 训练脚本
 ```bash
