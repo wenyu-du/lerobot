@@ -41,4 +41,4 @@ class BiSpaceMouseConfig(TeleoperatorConfig):
         scale: A list of floats to scale the linear and angular velocities from the two SpaceMice.
     """
 
-    scale: List[float] = field(default_factory=lambda: [0.5, 1])
+    scale: List[float] = field(default_factory=lambda: [1, 1])

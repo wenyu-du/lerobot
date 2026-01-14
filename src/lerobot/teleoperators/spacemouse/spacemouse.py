@@ -14,10 +14,12 @@
 
 import logging
 import multiprocessing
+import time
 from functools import cached_property
 from typing import Any, List, Tuple
 
 import numpy as np
+from easyhid import HIDException
 
 from lerobot.teleoperators.teleoperator import Teleoperator
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -37,6 +39,7 @@ class SingleSpaceMouseExpert:
 
     def __init__(self, device_number: int = 0, scale: float = 1.0):
         self.scale = scale
+        self.device_number = device_number
         try:
             self.devices = [pyspacemouse.open(DeviceNumber=device_number)]
             if not self.devices[0]:
@@ -64,30 +67,50 @@ class SingleSpaceMouseExpert:
 
     def _read_spacemouse(self):
         while True:
-            sm_state = self.devices[0].read()
-            if not sm_state:
-                continue
+            try:
+                sm_state = self.devices[0].read()
+                if not sm_state:
+                    continue
 
-            # The raw action from pyspacemouse is (x, y, z, roll, pitch, yaw)
-            # The provided example from copied_aerobot_rl_env/spacemouse/spacemouse_expert.py
-            # uses (-state[0].y, state[0].x, state[0].z, -state[0].roll, -state[0].pitch, -state[0].yaw)
-            action = [
-                -sm_state.y * self.scale,
-                sm_state.x * self.scale,
-                sm_state.z * self.scale,
-                -sm_state.roll * self.scale,
-                -sm_state.pitch * self.scale,
-                -sm_state.yaw * self.scale,
-            ]
+                # The raw action from pyspacemouse is (x, y, z, roll, pitch, yaw)
+                # The provided example from copied_aerobot_rl_env/spacemouse/spacemouse_expert.py
+                # uses (-state[0].y, state[0].x, state[0].z, -state[0].roll, -state[0].pitch, -state[0].yaw)
+                action = [
+                    -sm_state.y * self.scale,
+                    sm_state.x * self.scale,
+                    sm_state.z * self.scale,
+                    -sm_state.roll * self.scale,
+                    -sm_state.pitch * self.scale,
+                    -sm_state.yaw * self.scale,
+                ]
 
-            buttons = [0, 0]
-            if len(sm_state.buttons) >= 2:
-                buttons = [sm_state.buttons[0], sm_state.buttons[1]]
-            elif len(sm_state.buttons) == 1:
-                buttons = [sm_state.buttons[0], 0]
+                buttons = [0, 0]
+                if len(sm_state.buttons) >= 2:
+                    buttons = [sm_state.buttons[0], sm_state.buttons[1]]
+                elif len(sm_state.buttons) == 1:
+                    buttons = [sm_state.buttons[0], 0]
 
-            self.latest_data["action"] = action
-            self.latest_data["buttons"] = buttons
+                self.latest_data["action"] = action
+                self.latest_data["buttons"] = buttons
+            except HIDException:
+                logger.warning(f"SpaceMouse (device {self.device_number}) disconnected. Trying to reconnect...")
+                pyspacemouse.close()
+                time.sleep(1)
+                try:
+                    new_device = pyspacemouse.open(DeviceNumber=self.device_number)
+                    if new_device:
+                        self.devices = [new_device]
+                        logger.info(f"SpaceMouse (device {self.device_number}) reconnected.")
+                    else:
+                        logger.warning(
+                            f"Could not open SpaceMouse device {self.device_number} on reconnect. Will keep trying."
+                        )
+                        time.sleep(1)
+                except Exception as e:
+                    logger.warning(
+                        f"Error reconnecting SpaceMouse (device {self.device_number}): {e}. Will keep trying."
+                    )
+                    time.sleep(1)
 
     def get_action(self) -> Tuple[np.ndarray, list]:
         """Returns the latest action and button state of the SpaceMouse."""
@@ -120,10 +143,15 @@ class BiSpaceMouseExpert:
         self.scale = scale
         try:
             # pyspacemouse.open() with no DeviceNumber will try to open all.
-            # It returns a list of DeviceSpec objects.
-            self.devices = pyspacemouse.open()
-            if not self.devices:
+            # It returns a list of DeviceSpec objects, but can also return a single object.
+            devices = pyspacemouse.open()
+            if not devices:
                 raise Exception("No SpaceMouse devices found or opened.")
+
+            if not isinstance(devices, list):
+                self.devices = [devices]
+            else:
+                self.devices = devices
         except Exception as e:
             if "No device connected/supported" in str(e) or "No SpaceMouse devices found or opened." in str(e):
                 logger.warning("No SpaceMice connected or supported. Running without BiSpaceMouse.")
@@ -146,40 +174,62 @@ class BiSpaceMouseExpert:
 
     def _read_spacemice(self):
         while True:
-            all_sm_states = pyspacemouse.read_all()
-            if not all_sm_states:
-                continue
-
-            current_actions = []
-            current_all_buttons = []
-
-            for i, sm_state in enumerate(all_sm_states):
-                if not sm_state:
-                    current_actions.append([0.0] * 6)
-                    current_all_buttons.append([0, 0])
+            try:
+                all_sm_states = pyspacemouse.read_all()
+                if not all_sm_states:
                     continue
 
-                scale = self.scale[i] if i < len(self.scale) else 1.0
-                action = [
-                    -sm_state.y * scale,
-                    sm_state.x * scale,
-                    sm_state.z * scale,
-                    -sm_state.roll * scale,
-                    -sm_state.pitch * scale,
-                    -sm_state.yaw * scale,
-                ]
+                current_actions = []
+                current_all_buttons = []
 
-                buttons = [0, 0]
-                if len(sm_state.buttons) >= 2:
-                    buttons = [sm_state.buttons[0], sm_state.buttons[1]]
-                elif len(sm_state.buttons) == 1:
-                    buttons = [sm_state.buttons[0], 0]
+                for i, sm_state in enumerate(all_sm_states):
+                    if not sm_state:
+                        current_actions.append([0.0] * 6)
+                        current_all_buttons.append([0, 0])
+                        continue
 
-                current_actions.append(action)
-                current_all_buttons.append(buttons)
+                    scale = self.scale[i] if i < len(self.scale) else 1.0
+                    action = [
+                        -sm_state.y * scale,
+                        sm_state.x * scale,
+                        sm_state.z * scale,
+                        -sm_state.roll * scale,
+                        -sm_state.pitch * scale,
+                        -sm_state.yaw * scale,
+                    ]
 
-            self.latest_data["actions"] = current_actions
-            self.latest_data["all_buttons"] = current_all_buttons
+                    buttons = [0, 0]
+                    if len(sm_state.buttons) >= 2:
+                        buttons = [sm_state.buttons[0], sm_state.buttons[1]]
+                    elif len(sm_state.buttons) == 1:
+                        buttons = [sm_state.buttons[0], 0]
+
+                    current_actions.append(action)
+                    current_all_buttons.append(buttons)
+
+                self.latest_data["actions"] = current_actions
+                self.latest_data["all_buttons"] = current_all_buttons
+            except HIDException:
+                logger.warning("SpaceMouse disconnected. Trying to reconnect...")
+                pyspacemouse.close()
+                time.sleep(1)
+                try:
+                    devices = pyspacemouse.open()
+                    if not devices:
+                        logger.warning("Failed to reconnect to SpaceMouse devices. Will keep trying.")
+                        time.sleep(1)
+                    else:
+                        if not isinstance(devices, list):
+                            self.devices = [devices]
+                        else:
+                            self.devices = devices
+                        logger.info("SpaceMouse devices reconnected.")
+                        # Also need to update the data structures in the shared memory
+                        self.latest_data["actions"] = [[0.0] * 6 for _ in self.devices]
+                        self.latest_data["all_buttons"] = [[0, 0] for _ in self.devices]
+                except Exception as e:
+                    logger.error(f"Error while trying to reconnect to SpaceMouse devices: {e}")
+                    time.sleep(1)
 
     def get_actions(self) -> List[Tuple[np.ndarray, list]]:
         """Returns the latest actions and button states for all SpaceMice."""

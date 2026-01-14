@@ -16,7 +16,7 @@ robot:
             "low": [0.25351,0.22,0.02, 3.08,  -1.2 , 1.6],
             "high": [0.4851,0.3086857331173238,0.3469930313903671, 3.08,  -1.0 , 1.6],
         }
-    gripper_open_width: 0.025                # Custom gripper open width for the left arm
+    gripper_open_width: 0.04                # Custom gripper open width for the left arm
     cameras:                                # Custom camera configuration for the left arm
       wrist_cam:
         type: opencv
@@ -38,7 +38,7 @@ robot:
             "low":[0.25469, -0.273459, -0.05, 3.03, -1.2, -1.60],
             "high":[0.4869, -0.18, 0.2, 3.03, -1.0, -1.6],
     }
-    gripper_open_width: 0.025
+    gripper_open_width: 0.04
     gripper_close_width: 0.00               # Custom gripper close width for the right arm
     cameras:                                # Custom camera configuration for the right arm
       wrist_cam:
